@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ServicesController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('internal')->group(function () {
@@ -13,4 +14,8 @@ Route::prefix('internal')->group(function () {
         ]);
     });
 
+});
+
+Route::controller(ServicesController::class)->group(function () {
+    Route::post('/services/test','devTeste'); //rota para testes durante o desenvolvimento.
 });

@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'bling' => [
+        'client_id' => env('BLING_CLIENT_ID'),
+        'secret' => env('BLING_SECRET'),
+        'url' => env('BLING_URL')
+    ],
+
+    'meli' => [
+        'url' => env('MELI_MLB', 'https://api.mercadolibre.com')
+    ],
+
 ];
