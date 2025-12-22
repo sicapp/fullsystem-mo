@@ -33,14 +33,9 @@ class SearchAdsFunctions
 
         foreach($allAuthentications as $channels){
 
-            // $params = [
-            //     'channels' => $channels,
-            //     'allProducts' => $allProducts
-            // ];
-
             switch ($channels['code']) {
                 case 'MELI':
-                    // dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, 0, 'default');
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, 0, 'default');
                     break;
 
                 case 'BLING':
