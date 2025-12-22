@@ -10,4 +10,15 @@ class MeliCommunications extends Communications
         $uri = config('services.meli.url') . "/users/$sellerId/items/search?seller_sku={$sku}";        
         return self::get($uri, $token, null, true);
     }
+
+    public function getPublications($token, $sellerId, $scrool){
+        //ATENÇÃO, NÃO ALTERAR O LIMITE DESSA CONSULTA, ela deve ser sempre 20.
+        $uri = config('services.meli.url') . "/users/$sellerId/items/search?search_type=scan&limit=20&orders=last_updated_asc&scroll_id={$scrool}";        
+        return self::get($uri, $token, null, true);
+    }
+
+    public function multiGetItems($token, $itemsIds){
+        $uri = config('services.meli.url') . "/items?ids={$itemsIds}";
+        return self::get($uri, $token, null, true);
+    }
 }

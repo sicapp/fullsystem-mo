@@ -33,6 +33,17 @@ class BlingCommunications
         return self::returnResponse($response);
     }
 
+    public function getAllProducts($token, $page = 1){
+
+        $url = config('services.bling.url') . "/produtos?pagina={$page}&limite=100&criterio=1";
+
+        $response = Http::withToken($token)
+            ->acceptJson()
+            ->get($url);
+
+        return self::returnResponse($response);
+    }
+
 
     /*
      * Função que trata as respostas e erros da API
