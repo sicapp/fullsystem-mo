@@ -135,7 +135,7 @@ class SearchAdsFunctions
             $variations = [];
             if($item['variations'] != []){
                 foreach($item['variations'] as $variation){
-                    $variation[] = [
+                    $variations[] = [
                         'id' => $variation['id'],
                         'price' => $variation['price'],
                         'attribute_name' => $variation['attribute_combinations'][0]['name'],
