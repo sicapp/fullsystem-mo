@@ -103,7 +103,6 @@ class SearchAdsFunctions
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
-            $variations = [];
 
             $params = [
                 'family_name' => $item['family_name'] ?? null,
@@ -141,7 +140,7 @@ class SearchAdsFunctions
 
                     $attribs = $this->getAttrigutes($variationData['attributes'] ?? []);
 
-                    $variations[] = [
+                    $variations = [
                         'id' => $variation['id'],
                         'price' => $variation['price'],
                         'attribute_name' => $variation['attribute_combinations'][0]['name'],
