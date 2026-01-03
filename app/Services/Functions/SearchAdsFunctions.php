@@ -103,6 +103,7 @@ class SearchAdsFunctions
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
+            $variations = [];
 
             $params = [
                 'family_name' => $item['family_name'] ?? null,
