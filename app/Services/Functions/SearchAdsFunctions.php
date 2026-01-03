@@ -95,25 +95,15 @@ class SearchAdsFunctions
 
     }
     public function getDetailsAdMeli($result){
+        $token = $result['token'];
         $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
-        $items = $this->meli_communications->multiGetItems($result['token'], $itemsIds);
-
+        $items = $this->meli_communications->multiGetItems($token, $itemsIds);
         
         foreach(($items['data'] ?? []) as $item){
             $item = $item['body'];
+            $itemId = $item['id'];
+            $toStore = [];
 
-            $sku = null;
-            $ean = null;
-
-            foreach(($item['attributes'] ?? []) as $attributes){
-                if($attributes['id'] == 'GTIN'){
-                    $ean = $attributes['value_name'];
-                }
-                if($attributes['id'] == 'SELLER_SKU'){
-                    $sku = $attributes['value_name'];
-                }
-            }
-            
             $params = [
                 'family_name' => $item['family_name'] ?? null,
                 'user_product_id' => $item['user_product_id'] ?? null,
@@ -132,9 +122,24 @@ class SearchAdsFunctions
                 'original_price' => $item['original_price'] ?? null,
             ];
 
-            $variations = [];
+
+            //verificando se o item tem variações ou se é um item simples.
             if($item['variations'] != []){
+                //tem variações
+                
                 foreach($item['variations'] as $variation){
+                    $varId = $variation['id'];
+                    //buscar os dados da variação no mercado livre:
+                    $varMeli = $this->meli_communications->getVariationData($token, $itemId, $varId);
+                    $variationData = $varMeli['data'] ?? null;
+
+                    if(!$variationData){
+                        //se nao achou a variação, pula ela.
+                        continue;
+                    }
+
+                    $attribs = $this->getAttrigutes($variationData['attributes'] ?? []);
+
                     $variations[] = [
                         'id' => $variation['id'],
                         'price' => $variation['price'],
@@ -144,24 +149,49 @@ class SearchAdsFunctions
                         'sold_quantity' => $variation['sold_quantity'],
                         'user_product_id' => $variation['user_product_id']
                     ];
-                }
-            }
 
-            $toStore[] = [
-                'origin' => "MELI",
-                'user_id' => $result['userId'],
-                'item_id' => $item['id'],
-                'seller_id' => $item['seller_id'],
-                'sku' => $sku,
-                'ean' => $ean,
-                'title' => $item['title'],
-                'status' => $item['status'],
-                'prices' => json_encode($prices),
-                'variations' => json_encode($variations),
-                'params' => json_encode($params),
-                'created_at'  => dateUtc(),
-                'updated_at'  => dateUtc()
-            ];
+                    $toStore[] = [
+                        'origin' => "MELI",
+                        'user_id' => $result['userId'],
+                        'item_id' => $itemId,
+                        'variation_id' => $varId,
+                        'seller_id' => $item['seller_id'],
+                        'sku' => $attribs['sku'],
+                        'ean' => $attribs['ean'],
+                        'title' => $item['title'] . " " . $variation['attribute_combinations'][0]['value_name'],
+                        'status' => $item['status'],
+                        'prices' => json_encode($prices),
+                        'variations' => json_encode($variations),
+                        'params' => json_encode($params),
+                        'created_at'  => dateUtc(),
+                        'updated_at'  => dateUtc()
+                    ];
+
+                }
+            
+            }else{
+                //não tem variações
+                $attribs = $this->getAttrigutes($item['attributes'] ?? []);
+
+                $toStore[] = [
+                        'origin' => "MELI",
+                        'user_id' => $result['userId'],
+                        'item_id' => $item['id'],
+                        'variation_id' => 0,
+                        'seller_id' => $item['seller_id'],
+                        'sku' => $attribs['sku'],
+                        'ean' => $attribs['ean'],
+                        'title' => $item['title'],
+                        'status' => $item['status'],
+                        'prices' => json_encode($prices),
+                        'variations' => "[]",
+                        'params' => json_encode($params),
+                        'created_at'  => dateUtc(),
+                        'updated_at'  => dateUtc()
+                    ];
+
+            }
+            
 
             $this->publications_connections->storeOrUpdatePublications($toStore);
 
@@ -185,6 +215,22 @@ class SearchAdsFunctions
             //processar os itens
             foreach(($tempResult['data'] ?? []) as $dataItem){
 
+                if($dataItem['formato'] == 'V'){
+                    continue;
+                    // Se for produto PAI não registramos, registraremos apenas as variações.
+                }
+
+                //se tiver ID de produto pai, então é uma variação:
+                if($dataItem['idProdutoPai'] ?? false){
+                    //é variação
+                    $itemId = $dataItem['idProdutoPai'];
+                    $varId = $dataItem['id'];
+                }else{
+                    //não é variação
+                    $itemId = $dataItem['id'];
+                    $varId = 0;
+                }
+
                 $params = [
                     'idProdutoPai' => $dataItem['idProdutoPai'] ?? null,
                     'stock' => $dataItem['estoque'] ?? null,
@@ -196,7 +242,8 @@ class SearchAdsFunctions
                 $toStore[] = [
                     'origin' => "BLING",
                     'user_id' => $userId,
-                    'item_id' => $dataItem['id'],
+                    'item_id' => $itemId,
+                    'variation_id' => $varId,
                     'seller_id' => $sellerId,
                     'sku' => $dataItem['codigo'],
                     'ean' => null,
@@ -223,6 +270,25 @@ class SearchAdsFunctions
             }
         }
 
+    }
+
+
+    //Funções auxiliares
+
+    private function getAttrigutes($data){
+        foreach(($data ?? []) as $attributes){
+            if($attributes['id'] == 'GTIN'){
+                $ean = $attributes['value_name'];
+            }
+            if($attributes['id'] == 'SELLER_SKU'){
+                $sku = $attributes['value_name'];
+            }
+        }
+
+        return [
+            'ean' => $ean ?? null,
+            'sku' => $sku ?? null,
+        ];
     }
 
 }

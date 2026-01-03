@@ -26,7 +26,8 @@ class Publications extends Model
         'variations',
         'params',
         'created_at',
-        'updated_at'
+        'updated_at',
+        'variation_id',
     ];
 
     /**
