@@ -15,4 +15,5 @@ class ServicesController extends Controller
     {
         $result = $this->search_ads_functions->findAds();     
     }
+    
 }
