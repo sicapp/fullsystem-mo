@@ -1,0 +1,13 @@
+version: 0.0
+os: linux
+files:
+  - source: .
+    destination: /var/www/html/
+    owner: www-data
+hooks:
+  BeforeInstall:
+    - location: scripts/inicio.sh
+      runas: root
+  AfterInstall:
+    - location: scripts/permissao.sh
+      runas: root
