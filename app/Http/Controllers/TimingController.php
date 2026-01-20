@@ -153,15 +153,15 @@ class TimingController extends Controller
     }
     private function Interval_30_minuts()
     { 
-
         //
     }
     private function Interval_1_hour()
     {
         $now = Carbon::now('America/Sao_Paulo');
 
-        if($now->hour === 1 && $now->minute === 0)
-        {   //Executa a 1 da manhã
+        if($now->hour === 1 && $now->minute === 0)  //Executa a 1 da manhã
+        {   
+            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', $channels, 0, 'default');
         }
     }
 

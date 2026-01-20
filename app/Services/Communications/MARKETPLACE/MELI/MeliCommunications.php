@@ -26,4 +26,14 @@ class MeliCommunications extends Communications
         $uri = config('services.meli.url') . "/items/$itemId/variations/$varId";
         return self::get($uri, $token, null, true);
     }
+
+    public function getItemPrice($token, $resource){
+        $uri = config('services.meli.url') . $resource;
+        return self::get($uri, $token, null, true);
+    }
+    
+    public function getItemById($token, $itemId){   
+        $uri = config('services.meli.url') . "/items/{$itemId}";
+        return self::get($uri, $token, null, true);
+    }
 }

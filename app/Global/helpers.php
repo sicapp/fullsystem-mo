@@ -1,6 +1,7 @@
 <?php
 
 use Carbon\Carbon;
+use App\Services\DbConnections\CallbackConnections;
 
 if (! function_exists('dateUtc')){
     function dateUtc($type = null, $modify = null, $format = 'Y-m-d H:i:s'){
@@ -43,5 +44,52 @@ if (! function_exists('dispatchGenericJob')) {
         dispatch($job);
     
         // globalJob::dispatch($className, $methodName, $params);
+    }
+}
+
+// Função que atualiza os callbacks recebidos com o resultado de sua execução
+if (!function_exists('updateCallback')) {
+    function updateCallback(int $callbackId, int $status, array $dataError): void
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0];
+
+        $dataError['reference'] = [
+            'file' => $trace['file'] ?? 'desconhecido',
+            'line' => $trace['line'] ?? 'desconhecida'
+        ];
+
+        $data = [
+            'status' => $status,
+            'updated_at' => dateUtc(),
+            'data_status' => json_encode(($dataError ?? []))
+        ];
+
+        $callbagConnections = new CallbackConnections;
+        $callbagConnections->updateCallback($callbackId, $data);
+
+    }
+}
+
+//Função para transformar json em array
+if (!function_exists('json_to_array')) {
+    function json_to_array($value, array $default = []): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if ($value instanceof \Illuminate\Support\Collection) {
+            return $value->toArray();
+        }
+
+        if (!is_string($value)) {
+            return $default;
+        }
+
+        $decoded = json_decode($value, true);
+
+        return json_last_error() === JSON_ERROR_NONE && is_array($decoded)
+            ? $decoded
+            : $default;
     }
 }

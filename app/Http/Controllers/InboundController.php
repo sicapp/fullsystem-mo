@@ -29,38 +29,12 @@ class InboundController extends Controller
                 'updated_at' => dateUtc()
             ];
 
-        }elseif($request->input('origin') == 'BLING'){
-            $dataCallback = [
-                'origin' => $request->input('origin'),
-                'reference' => $request->input('event'),
-                'reference_id' => $request->input('data.id'),
-                'company_id' => $request->input('companyId'),
-                'status' => 0,
-                'data' => json_encode($request->all()),
-                'data_status' => null,
-                'created_at' => dateUtc(),
-                'updated_at' => dateUtc()
-            ];
-
-        }elseif($request->input('origin') == 'MANUAL'){
-            $dataCallback = [
-                'origin' => $request->input('origin'),
-                'reference' => $request->input('code') . ':' . $request->input('topic'),
-                'reference_id' => $request->input('resource'),
-                'company_id' => $request->input('companyId'),
-                'status' => 0,
-                'data' => json_encode($request->all()),
-                'data_status' => null,
-                'created_at' => dateUtc(),
-                'updated_at' => dateUtc()
-            ];
-
         }
 
         if($dataCallback){
             $idCallBack = $this->callbackConnections->insertGetId($dataCallback, __FUNCTION__);
             if($idCallBack){
-                dispatchGenericJob(\App\Services\Inbounds\DistributorInbound::class, 'inputDistributor', ['idCallBack' => $idCallBack, 'dataCallback' => $dataCallback], 0, 'beInbound');
+                dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
             }
         }
     
