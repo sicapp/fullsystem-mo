@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\ServicesController;
+use App\Http\Controllers\TimingController;
+use App\Http\Controllers\InboundController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('internal')->group(function () {
@@ -19,3 +21,8 @@ Route::prefix('internal')->group(function () {
 Route::controller(ServicesController::class)->group(function () {
     Route::post('/services/test','devTeste'); //rota para testes durante o desenvolvimento.
 });
+
+Route::post('/pacemaker', [TimingController::class, 'pacemaker'])->name('pacemaker');
+
+
+Route::post('/inboundSe', [InboundController::class, 'inboundSe'])->name('inboundSe');
