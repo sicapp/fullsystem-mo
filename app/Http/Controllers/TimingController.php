@@ -161,7 +161,7 @@ class TimingController extends Controller
 
         if($now->hour === 1 && $now->minute === 0)  //Executa a 1 da manhã
         {   
-            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', $channels, 0, 'default');
+            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', [], 0, 'default');
         }
     }
 
