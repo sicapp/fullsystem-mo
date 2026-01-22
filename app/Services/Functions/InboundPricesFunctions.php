@@ -251,7 +251,8 @@ class InboundPricesFunctions
                 'price_group_name' => $groupName,
                 'punish' => null,
                 'item_id' => $itemId,
-                'url' => $permalink
+                'url' => $permalink,
+                'created_at' => dateUtc()
             ];
             $infraction = $this->price_infractions_connections->insertGetId($dataInfraction);
 

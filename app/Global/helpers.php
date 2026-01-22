@@ -2,6 +2,7 @@
 
 use Carbon\Carbon;
 use App\Services\DbConnections\CallbackConnections;
+use App\Services\DbConnections\MessageConnections;
 
 if (! function_exists('dateUtc')){
     function dateUtc($type = null, $modify = null, $format = 'Y-m-d H:i:s'){
@@ -91,5 +92,29 @@ if (!function_exists('json_to_array')) {
         return json_last_error() === JSON_ERROR_NONE && is_array($decoded)
             ? $decoded
             : $default;
+    }
+}
+
+// Salvar mensagem para o usuário
+if (!function_exists('createSystemMessage')) {
+    function createSystemMessage(
+        string $messageId,
+        int $userId,
+        string $messageText,
+        ?int $alert = 0
+    ): void {
+
+        /** @var MessageConnections $messageConnections */
+        $messageConnections = app(MessageConnections::class);
+
+        $params = [
+            'message_id' => $messageId,
+            'user_id'    => $userId,
+            'message'    => $messageText,
+            'alert'      => $alert,
+            'created_at' => dateUtc(),
+        ];
+
+        $messageConnections->insertOrIgnore($params, null);
     }
 }
