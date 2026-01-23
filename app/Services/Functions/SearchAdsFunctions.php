@@ -181,21 +181,21 @@ class SearchAdsFunctions
                 $attribs = $this->getAttrigutes($item['attributes'] ?? []);
 
                 $toStore[] = [
-                        'origin' => "MELI",
-                        'user_id' => $result['userId'],
-                        'item_id' => $item['id'],
-                        'variation_id' => 0,
-                        'seller_id' => $item['seller_id'],
-                        'sku' => $attribs['sku'],
-                        'ean' => $attribs['ean'],
-                        'title' => $item['title'],
-                        'status' => $item['status'],
-                        'prices' => json_encode($prices),
-                        'variations' => "[]",
-                        'params' => json_encode($params),
-                        'created_at'  => dateUtc(),
-                        'updated_at'  => dateUtc()
-                    ];
+                    'origin' => "MELI",
+                    'user_id' => $result['userId'],
+                    'item_id' => $item['id'],
+                    'variation_id' => 0,
+                    'seller_id' => $item['seller_id'],
+                    'sku' => $attribs['sku'],
+                    'ean' => $attribs['ean'],
+                    'title' => $item['title'],
+                    'status' => $item['status'],
+                    'prices' => json_encode($prices),
+                    'variations' => "[]",
+                    'params' => json_encode($params),
+                    'created_at'  => dateUtc(),
+                    'updated_at'  => dateUtc()
+                ];
 
             }
             

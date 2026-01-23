@@ -49,5 +49,7 @@ class InboundController extends Controller
         if($request->route('task') == 'findAds' && $authId){
             $this->search_ads_functions->findAds($authId);
         }
+
+        return response('ok', 200);
     }
 }
