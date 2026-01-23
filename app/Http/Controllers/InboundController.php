@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DbConnections\CallbackConnections;
+use App\Services\Functions\SearchAdsFunctions;
 use Illuminate\Http\Request;
 
 class InboundController extends Controller
@@ -10,6 +11,7 @@ class InboundController extends Controller
 
     public function __construct(
         protected CallbackConnections $callbackConnections,
+        protected SearchAdsFunctions $search_ads_functions,
     ) {}
 
     public function inboundSe(Request $request){
@@ -40,5 +42,12 @@ class InboundController extends Controller
     
         return response('ok', 200);
 
+    }
+
+    public function inboundBe(Request $request){
+        $authId = $request->input('authId');
+        if($request->route('task') == 'findAds' && $authId){
+            $this->search_ads_functions->findAds($authId);
+        }
     }
 }

@@ -18,4 +18,14 @@ class AuthenticationConnections extends BaseConnection
             ->get();
     }
 
+    public function getMinimalDataFromEspecificChannel($authId){
+        return $this->newQuery()
+            ->where([
+                ['id' , $authId],
+                ["active", 1]
+            ])
+            ->select('id', 'user_id', 'user_channel_id', 'code', 'group', 'token', 'token_valid_at')
+            ->get();
+    }
+
 }

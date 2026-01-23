@@ -26,3 +26,5 @@ Route::post('/pacemaker', [TimingController::class, 'pacemaker'])->name('pacemak
 
 
 Route::post('/inboundSe', [InboundController::class, 'inboundSe'])->name('inboundSe');
+
+Route::post('/inboundBe/{task}', [InboundController::class, 'inboundBe'])->name('inboundBe');

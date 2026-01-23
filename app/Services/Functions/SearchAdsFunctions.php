@@ -24,9 +24,16 @@ class SearchAdsFunctions
         protected BlingCommunications $bling_communications
     ) {}
 
-    public function findAds(){
-        // 1 - Busca os canais de vendas em authentications
-        $allAuthentications = $this->authentication_connections->getMinimalDataFromChannels()->toArray();
+    public function findAds($authId = null){
+
+        //Se $authId == null, então busca de todos os sellers, senão busca do seller específico.
+        if($authId){
+            // 1 - Busca de um canal específico
+            $allAuthentications = $this->authentication_connections->getMinimalDataFromEspecificChannel($authId)->toArray();
+        }else{
+            // 1 - Busca os canais de vendas em authentications
+            $allAuthentications = $this->authentication_connections->getMinimalDataFromChannels()->toArray();
+        }
 
         // 2 - Busca a relação de SKUs e EANs do fornecedor
         //$allProducts = $this->product_provider_connections->getMinimalDataFromProducts()->toArray();
