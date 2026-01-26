@@ -51,6 +51,7 @@ class InboundPricesFunctions
         if($minutesLeft <= 3){
             //o token está prestes a vencer, então reprograma o processo.
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 300, 'default');
+            updateCallback($idCallBack, 3, ['Token do seller esta prestes a vencer, reprogramado processo!']);
         }
 
         //consultando o usuário do sistema
@@ -109,6 +110,11 @@ class InboundPricesFunctions
                 if(!$productData){
                     //Não encontrou o produto cadastrado com esse SKU, então procuramos pelo ean:
                     $productData = $this->product_provider_connections->findBy('ean', $ean);
+                }
+
+                if(!$productData){
+                    updateCallback($idCallBack, 2, ['Attempt' => $attempt, 'message' => 'Produto não existe no sistema!']);
+                    return false;
                 }
 
                 $pricesGroups = json_to_array($productData['prices_group'] ?? []);
@@ -238,7 +244,6 @@ class InboundPricesFunctions
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
         if ($salePrice < $minimalPriceToUse){
             //Está abaixo do mínimo.
-            //1 - Registrar a infração.
             $dataInfraction = [
                 'user_id' => $userId,
                 'seller_id' => $sellerId,
@@ -254,13 +259,42 @@ class InboundPricesFunctions
                 'url' => $permalink,
                 'created_at' => dateUtc()
             ];
+
+            $pauseAdd = true;
+
+            //1 - Tentar ajustar o preço
+            $updatePrice = $this->meli_communications->setItemPrice($itemId, $minimalPriceToUse, $token);
+            $updateResult = data_get($updatePrice, 'data.price', 0);
+            if($updateResult > 0){
+                $pauseAdd = true;
+                $dataInfraction['punish'] = 'O preço foi atualizado';
+            }
+            
+            //2 - Pausar anúncio
+            if($pauseAdd){
+                //$paused = $this->meli_communications->pauseItem($itemId, $token);
+                // $resultPause = data_get($paused, 'data.status', false);
+                // if($resultPause == 'paused'){
+                //     $dataInfraction['punish'] = 'O anúncio foi pausado';
+                // }
+                //TODO: REATIVAR PARA PAUSAR
+            }
+
+            //3 - Registrar a infração.
             $infraction = $this->price_infractions_connections->insertGetId($dataInfraction);
 
-            //2 - Enviar mensagem ao usuário.
-            // TODO  - Enviar mensagem ao seller
+            //4 - Enviar mensagem ao usuário.
+            $punish = $dataInfraction['punish'];
+            if($punish){
+                $messageText = "O anúncio { $itemId } estava abaixo do preço mínimo. Resultado: { $punish }";
+            }else{
+                $messageText = "O anúncio { $itemId } está abaixo do preço mínimo. Atualize o preço para no mínimo R$ " . brMoney($minimalPriceToUse);
+            }
+            
+            $messageId = "Price_Infraction_" . $itemId . date('y_m_d');
 
-            //3 - Tentar ajustar o preço, se não der pausa o anuncio.
-            // TODO - Ajustar / pausar anúncio
+            createSystemMessage($messageId, $userId, $messageText, 1);
+
         }
 
     }

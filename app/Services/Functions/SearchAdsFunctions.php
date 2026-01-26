@@ -28,7 +28,7 @@ class SearchAdsFunctions
 
         //Se $authId == null, então busca de todos os sellers, senão busca do seller específico.
         if($authId){
-            // 1 - Busca de um canal específico
+            // 1 - Busca de um seller específico
             $allAuthentications = $this->authentication_connections->getMinimalDataFromEspecificChannel($authId)->toArray();
         }else{
             // 1 - Busca os canais de vendas em authentications
@@ -105,11 +105,15 @@ class SearchAdsFunctions
         $token = $result['token'];
         $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
         $items = $this->meli_communications->multiGetItems($token, $itemsIds);
-        
+
         foreach(($items['data'] ?? []) as $item){
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
+
+            if($item['status'] != 'active'){
+                continue;
+            }
 
             $params = [
                 'family_name' => $item['family_name'] ?? null,
@@ -202,6 +206,9 @@ class SearchAdsFunctions
 
             $this->publications_connections->storeOrUpdatePublications($toStore);
 
+
+            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, 0, 'default');
+
         }
     }
 
@@ -281,6 +288,32 @@ class SearchAdsFunctions
 
 
     //Funções auxiliares
+    public function checkPricesMeli($itemsData){
+        foreach($itemsData as $dataItem){
+            if($dataItem['status'] == 'active'){
+                $sku = $dataItem['sku'];
+                $ean = $dataItem['ean'];
+                $product = $this->product_provider_connections->findProductBySkuOrEan($sku, $ean);
+
+                if($product){
+                    //gerando o job de verificação de preços:
+                    $itemId = $dataItem['item_id'];
+                    $dataCallback = [
+                        'origin' => $dataItem['origin'],
+                        'reference' => "items_prices",
+                        'reference_id' => "/items/{ $itemId }/prices",
+                        'company_id' => $dataItem['seller_id'],
+                        'status' => 0,
+                        'data' => null,
+                        'data_status' => null,
+                        'created_at' => dateUtc(),
+                        'updated_at' => dateUtc()
+                    ];
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => 0, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
+                }
+            }
+        }
+    }
 
     private function getAttrigutes($data){
         foreach(($data ?? []) as $attributes){

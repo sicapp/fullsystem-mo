@@ -17,4 +17,13 @@ class ProductProviderConnections extends BaseConnection
             ->get();
     }
 
+    public function findProductBySkuOrEan($sku, $ean){
+        return $this->newQuery()
+            ->where([
+                ['sku', $sku],
+                ['ean', $ean]
+            ])
+            ->first();
+    }
+
 }

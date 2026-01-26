@@ -118,3 +118,10 @@ if (!function_exists('createSystemMessage')) {
         $messageConnections->insertOrIgnore($params, null);
     }
 }
+
+if (! function_exists('brMoney')) {
+    function brMoney($v)
+    {
+        return $v === null || $v === '' ? '' : 'R$ ' . number_format((float) $v, 2, ',', '.');
+    }
+}
