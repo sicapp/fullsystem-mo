@@ -100,6 +100,7 @@ if (!function_exists('createSystemMessage')) {
     function createSystemMessage(
         string $messageId,
         int $userId,
+        string $title,
         string $messageText,
         ?int $alert = 0
     ): void {
@@ -110,6 +111,7 @@ if (!function_exists('createSystemMessage')) {
         $params = [
             'message_id' => $messageId,
             'user_id'    => $userId,
+            'title'      => $title,
             'message'    => $messageText,
             'alert'      => $alert,
             'created_at' => dateUtc(),

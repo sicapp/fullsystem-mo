@@ -286,14 +286,16 @@ class InboundPricesFunctions
             //4 - Enviar mensagem ao usuário.
             $punish = $dataInfraction['punish'];
             if($punish){
+                $title = 'Infração';
                 $messageText = "O anúncio { $itemId } estava abaixo do preço mínimo. Resultado: { $punish }";
             }else{
+                $title = 'Infração';
                 $messageText = "O anúncio { $itemId } está abaixo do preço mínimo. Atualize o preço para no mínimo R$ " . brMoney($minimalPriceToUse);
             }
             
             $messageId = "Price_Infraction_" . $itemId . date('y_m_d');
 
-            createSystemMessage($messageId, $userId, $messageText, 1);
+            createSystemMessage($messageId, $userId, $title, $messageText, 1);
 
         }
 
