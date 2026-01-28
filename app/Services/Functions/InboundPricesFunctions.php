@@ -264,20 +264,31 @@ class InboundPricesFunctions
 
             //1 - Tentar ajustar o preço
             $updatePrice = $this->meli_communications->setItemPrice($itemId, $minimalPriceToUse, $token);
+
             $updateResult = data_get($updatePrice, 'data.price', 0);
             if($updateResult > 0){
-                $pauseAdd = true;
-                $dataInfraction['punish'] = 'O preço foi atualizado';
+                $pauseAdd = false;
+                $dataInfraction['punish'] = 'Iniciada atualização de preço.';
+
+                //Rodar o Job de confirmação.
+                $dataRecheck = [
+                    'idCallBack'        =>  $idCallBack,
+                    'minimalPriceToUse' =>  $minimalPriceToUse,
+                    'sellerId'          =>  $sellerId,
+                    'itemId'            =>  $itemId,
+                    'token'             =>  $token,
+                    'resource'          =>  $resource
+                ];
+                dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'checkPricesInbound', $dataRecheck, 60, 'default');
             }
             
-            //2 - Pausar anúncio
+            //2 - Pausar anúncio se não conseguiu atualizar os preços.
             if($pauseAdd){
-                //$paused = $this->meli_communications->pauseItem($itemId, $token);
-                // $resultPause = data_get($paused, 'data.status', false);
-                // if($resultPause == 'paused'){
-                //     $dataInfraction['punish'] = 'O anúncio foi pausado';
-                // }
-                //TODO: REATIVAR PARA PAUSAR
+                $paused = $this->meli_communications->pauseItem($itemId, $token);
+                $resultPause = data_get($paused, 'data.status', false);
+                if($resultPause == 'paused'){
+                    $dataInfraction['punish'] = 'O anúncio foi pausado';
+                }
             }
 
             //3 - Registrar a infração.
@@ -298,7 +309,39 @@ class InboundPricesFunctions
             createSystemMessage($messageId, $userId, $title, $messageText, 1);
 
         }
+    }
 
+    public function checkPricesInbound($dataRecheck){
+        $token = $dataRecheck['token'];
+        $userId = $dataRecheck['userId'];
+        $minimalPriceToUse = $dataRecheck['minimalPriceToUse'];
+        $itemId = $dataRecheck['itemId'];
+        $resource = $dataRecheck['resource'];
+
+        //Consultar o valor de venda.
+        $priceData = $this->meli_communications->getItemPrice($token, $resource);
+        
+        $salePrice = 9999999999;
+        //passou, então vamos verificar o menor preço praticado pelo anúncio:
+        foreach($priceData['data']['prices'] as $value) {
+            if($value['amount'] < $salePrice){
+                $salePrice = $value['amount'];
+            }
+        }
+
+        if($salePrice < $minimalPriceToUse){
+            //Continua abaixo, pausa o anúncio.
+            $paused = $this->meli_communications->pauseItem($itemId, $token);
+            $resultPause = data_get($paused, 'data.status', false);
+            if($resultPause == 'paused'){
+                $title = 'Infração';
+                $messageId = "Price_Infraction_" . $itemId . date('y_m_d') . 'rechek';
+                $messageText = "O anúncio { $itemId } estava abaixo do preço mínimo e foi pausado!";
+                createSystemMessage($messageId, $userId, $title, $messageText, 1);
+            }
+
+        }
+        
     }
 
 
