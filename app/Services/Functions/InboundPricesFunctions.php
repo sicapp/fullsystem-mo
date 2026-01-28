@@ -272,6 +272,7 @@ class InboundPricesFunctions
 
                 //Rodar o Job de confirmação.
                 $dataRecheck = [
+                    'userId'            =>  $userId,
                     'idCallBack'        =>  $idCallBack,
                     'minimalPriceToUse' =>  $minimalPriceToUse,
                     'sellerId'          =>  $sellerId,
