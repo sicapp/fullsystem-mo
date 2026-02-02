@@ -220,8 +220,9 @@ class SearchAdsFunctions
             
             $this->publications_connections->storeOrUpdatePublications($toStore);
             $delay += 0.5;
-            // dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, $delay, 'default');
-
+            if($fsItem ?? false){
+                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, $delay, 'default');
+            }
         }
     }
 

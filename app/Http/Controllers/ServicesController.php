@@ -19,13 +19,13 @@ class ServicesController extends Controller
     {
 
     
-        $result = $this->search_ads_functions->findAds();
+        $this->monitoring_function->getItemToMonitoring();
 
-        dd($result);
+        return 'Iniciado getItemToMonitoring';
 
         $result = $this->search_ads_functions->findAds();
     
-            $this->monitoring_function->getItemToMonitoring();
+        $this->monitoring_function->getItemToMonitoring();
     }
     
 }
