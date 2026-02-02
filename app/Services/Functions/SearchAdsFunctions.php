@@ -42,23 +42,26 @@ class SearchAdsFunctions
 
         // 2 - Busca a relação de SKUs e EANs do fornecedor
         //$allProducts = $this->product_provider_connections->getMinimalDataFromProducts()->toArray();
-
+        $delay = 0;
         foreach($allAuthentications as $channels){
             
+            // delay para evitar HTTP 429
+            $delay += 0.5;
             switch ($channels['code']) {
                 case 'MELI':
                     Log::channel('process')->info('3- Code:' . $channels['code'] . '  User_id: ' . $channels['user_id']);
-                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, 0, 'default');
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, $delay, 'default');
                     break;
 
                 case 'BLING':
-                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdBling', $channels, 0, 'default');
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdBling', $channels, $delay, 'default');
                     break;    
 
                 default:
                     # code...
                     break;
             }
+            
         }
 
     }
@@ -74,6 +77,7 @@ class SearchAdsFunctions
         $allResults = [];
         $limit = 10;
         $count = 0;
+        $delay = 0;
 
         while (true) {
 
@@ -92,14 +96,12 @@ class SearchAdsFunctions
                     'sellerId' => $sellerId,
                     'userId' => $userId
                 ];
+                $delay += 0.5;
                 Log::channel('process')->info('4- Count:' . count($params['result'] ?? []) . ' userId: ' . $params['userId'] . '  sellerId: ' . $params['sellerId']);
-                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, 0, 'default');
+                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, $delay, 'default');
             }
 
             $count++;
-
-            // delay para evitar HTTP 429
-            usleep(500000); // 0.5s
 
             if ($count >= $limit || empty($scrool)) {
                 break;
@@ -112,6 +114,7 @@ class SearchAdsFunctions
         $token = $result['token'];
         $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
         $items = $this->meli_communications->multiGetItems($token, $itemsIds);
+        $delay = 0;
 
         foreach(($items['data'] ?? []) as $item){
             $item = $item['body'];
@@ -214,9 +217,9 @@ class SearchAdsFunctions
             
 
             $this->publications_connections->storeOrUpdatePublications($toStore);
-
+            $delay += 0.5;
             Log::channel('process')->info('6- item_id:' . $item['id'] . ' Chegou Verificação' );
-            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, 0, 'default');
+            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, $delay, 'default');
 
         }
     }
@@ -298,6 +301,7 @@ class SearchAdsFunctions
 
     //Funções auxiliares
     public function checkPricesMeli($itemsData){
+        $delay = 0;
         foreach($itemsData as $dataItem){
             if($dataItem['status'] == 'active'){
                 $sku = $dataItem['sku'];
@@ -318,7 +322,9 @@ class SearchAdsFunctions
                         'created_at' => dateUtc(),
                         'updated_at' => dateUtc()
                     ];
-                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => 0, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
+
+                    $delay += 0.5;
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => 0, 'dataCallback' => $dataCallback, 'attempt' => 0], $delay, 'default');
                 }
             }
         }
