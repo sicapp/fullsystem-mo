@@ -18,13 +18,14 @@ class ServicesController extends Controller
     public function devTeste(Request $request)
     {
 
+    
         $result = $this->search_ads_functions->findAds();
 
         dd($result);
 
-        $this->monitoring_function->getItemToMonitoring();
+        $result = $this->search_ads_functions->findAds();
     
-            
+            $this->monitoring_function->getItemToMonitoring();
     }
     
 }

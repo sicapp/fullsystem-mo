@@ -14,13 +14,14 @@ class PublicationsConnections extends BaseConnection
     public function storeOrUpdatePublications(array $toStore){
         return $this->newQuery()->upsert(
             $toStore,
-            ['user_id', 'variation_id', 'item_id'],
+            ['user_id', 'variation_id', 'item_id', 'fs_item'],
             [
                 'origin',
                 'sku',
                 'ean',
                 'title',
                 'status',
+                'fs_item',
                 'prices',
                 'variations',
                 'params',

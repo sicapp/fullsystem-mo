@@ -15,7 +15,8 @@ class MonitoringFunction
     public function getItemToMonitoring(){
         $conditions = [
             'origin' => 'MELI',
-            'status' => 'active'
+            'status' => 'active',
+            'fs_item' => 1
         ];
         $publications = $this->publicationsConnections->findAllByConditions($conditions);
 
