@@ -237,13 +237,12 @@ class InboundPricesFunctions
             $this->publications_connections->storeOrUpdatePublications($toStore);
 
             //reprograma o processo
-            Log::channel('process')->info('8- Reprogramado:' . ' idCallBack ' . $idCallBack);
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'default');
             return false;
 
         }
-
-        Log::channel('process')->info('9- Item:' . $itemId . ' salePrice:' . $salePrice . ' minimalPriceToUse ' . $minimalPriceToUse);
+        
+        Log::channel('process')->info('1- Item:' . $itemId . ' Venda:' . $salePrice . ' Minimo: ' . $minimalPriceToUse);
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
         if ($salePrice < $minimalPriceToUse){
             //Está abaixo do mínimo.
@@ -270,7 +269,7 @@ class InboundPricesFunctions
 
             $updateResult = data_get($updatePrice, 'data.price', 0);
 
-            Log::channel('process')->info('10- setItemPrice:' . $updateResult . ' ItemId: ' . $itemId);
+            Log::channel('process')->info('3- setItemPrice:' . $updateResult . ' ItemId: ' . $itemId);
 
             if($updateResult > 0){
                 $pauseAdd = false;

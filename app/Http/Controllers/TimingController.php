@@ -163,6 +163,11 @@ class TimingController extends Controller
         {   
             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', [], 0, 'default');
         }
+
+        if($now->hour === 4 && $now->minute === 0)  //Executa as 4 da manhã
+        {   
+            dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', [], 0, 'default');
+        }
     }
 
     // EXECUÇÕES DIÁRIAS E SEMANAIS

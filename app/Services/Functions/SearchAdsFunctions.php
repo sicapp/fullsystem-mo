@@ -28,9 +28,6 @@ class SearchAdsFunctions
 
     public function findAds($authId = null){
 
-        Log::channel('process')->info('1- Processo iniciado');
-        Log::channel('process')->info('2- $authId:' . $authId);
-
         //Se $authId == null, então busca de todos os sellers, senão busca do seller específico.
         if($authId){
             // 1 - Busca de um seller específico
@@ -44,12 +41,11 @@ class SearchAdsFunctions
         //$allProducts = $this->product_provider_connections->getMinimalDataFromProducts()->toArray();
         $delay = 0;
         foreach($allAuthentications as $channels){
-            
+
             // delay para evitar HTTP 429
             $delay += 0.5;
             switch ($channels['code']) {
                 case 'MELI':
-                    Log::channel('process')->info('3- Code:' . $channels['code'] . '  User_id: ' . $channels['user_id']);
                     dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, $delay, 'default');
                     break;
 
@@ -79,6 +75,8 @@ class SearchAdsFunctions
         $count = 0;
         $delay = 0;
 
+        $refList = $this->getDataProducts();
+
         while (true) {
 
             $tempResult = $this->meli_communications->getPublications(
@@ -94,10 +92,10 @@ class SearchAdsFunctions
                     'result' => $tempResult['data']['results'],
                     'token' => $token,
                     'sellerId' => $sellerId,
-                    'userId' => $userId
+                    'userId' => $userId,
+                    'refList' => $refList,
                 ];
                 $delay += 0.5;
-                Log::channel('process')->info('4- Count:' . count($params['result'] ?? []) . ' userId: ' . $params['userId'] . '  sellerId: ' . $params['sellerId']);
                 dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, $delay, 'default');
             }
 
@@ -115,13 +113,12 @@ class SearchAdsFunctions
         $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
         $items = $this->meli_communications->multiGetItems($token, $itemsIds);
         $delay = 0;
+        $refList = $result['refList'];
 
         foreach(($items['data'] ?? []) as $item){
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
-
-            Log::channel('process')->info('5- item_id:' . $item['id'] . ' status: ' . $item['status'] );
 
             if($item['status'] != 'active'){
                 continue;
@@ -149,7 +146,7 @@ class SearchAdsFunctions
             //verificando se o item tem variações ou se é um item simples.
             if($item['variations'] != []){
                 //tem variações
-                
+
                 foreach($item['variations'] as $variation){
                     $varId = $variation['id'];
                     //buscar os dados da variação no mercado livre:
@@ -173,6 +170,8 @@ class SearchAdsFunctions
                         'user_product_id' => $variation['user_product_id']
                     ];
 
+                    $fsItem = (in_array($attribs['sku'], $refList) || in_array($attribs['ean'], $refList));
+
                     $toStore[] = [
                         'origin' => "MELI",
                         'user_id' => $result['userId'],
@@ -183,6 +182,7 @@ class SearchAdsFunctions
                         'ean' => $attribs['ean'],
                         'title' => $item['title'] . " " . $variation['attribute_combinations'][0]['value_name'],
                         'status' => $item['status'],
+                        'fs_item' => $fsItem,
                         'prices' => json_encode($prices),
                         'variations' => json_encode($variations),
                         'params' => json_encode($params),
@@ -196,6 +196,8 @@ class SearchAdsFunctions
                 //não tem variações
                 $attribs = $this->getAttrigutes($item['attributes'] ?? []);
 
+                $fsItem = (in_array($attribs['sku'], $refList) || in_array($attribs['ean'], $refList));
+
                 $toStore[] = [
                     'origin' => "MELI",
                     'user_id' => $result['userId'],
@@ -206,6 +208,7 @@ class SearchAdsFunctions
                     'ean' => $attribs['ean'],
                     'title' => $item['title'],
                     'status' => $item['status'],
+                    'fs_item' => $fsItem,
                     'prices' => json_encode($prices),
                     'variations' => "[]",
                     'params' => json_encode($params),
@@ -215,10 +218,8 @@ class SearchAdsFunctions
 
             }
             
-
             $this->publications_connections->storeOrUpdatePublications($toStore);
             $delay += 0.5;
-            Log::channel('process')->info('6- item_id:' . $item['id'] . ' Chegou Verificação' );
             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, $delay, 'default');
 
         }
@@ -307,7 +308,7 @@ class SearchAdsFunctions
                 $sku = $dataItem['sku'];
                 $ean = $dataItem['ean'];
                 $product = $this->product_provider_connections->findProductBySkuOrEan($sku, $ean);
-                Log::channel('process')->info('7- sku:' . $sku . ' ean ' . $ean);
+
                 if($product){
                     //gerando o job de verificação de preços:
                     $itemId = $dataItem['item_id'];
@@ -344,6 +345,23 @@ class SearchAdsFunctions
             'ean' => $ean ?? null,
             'sku' => $sku ?? null,
         ];
+    }
+
+    private function getDataProducts(){
+        $products = $this->product_provider_connections->getAll();
+
+        $refist = [];
+
+        foreach($products as $product){
+            if($product['sku']){
+                $refist[] = $product['sku'];
+            }
+            if($product['ean']){
+                $refist[] = $product['ean'];
+            }
+        }
+        
+        return $refist;
     }
 
 }

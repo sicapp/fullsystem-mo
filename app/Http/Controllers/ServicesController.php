@@ -2,18 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Functions\MonitoringFunction;
 use App\Services\Functions\SearchAdsFunctions;
+use Illuminate\Contracts\Queue\Monitor;
 use Illuminate\Http\Request;
 
 class ServicesController extends Controller
 {
     public function __construct(
-        protected SearchAdsFunctions $search_ads_functions
+        protected SearchAdsFunctions $search_ads_functions,
+        protected MonitoringFunction $monitoring_function
+
     ) {}
 
     public function devTeste(Request $request)
     {
-        $result = $this->search_ads_functions->findAds();     
+
+        $result = $this->search_ads_functions->findAds();
+
+        dd($result);
+
+        $this->monitoring_function->getItemToMonitoring();
+    
+            
     }
     
 }
