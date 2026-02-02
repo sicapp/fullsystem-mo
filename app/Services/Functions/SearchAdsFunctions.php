@@ -10,6 +10,8 @@ use App\Services\DbConnections\AuthenticationConnections;
 use App\Services\DbConnections\ProductProviderConnections;
 use App\Services\DbConnections\ProductRelationConnections;
 use App\Services\DbConnections\PublicationsConnections;
+use Illuminate\Support\Facades\Log;
+
 
 class SearchAdsFunctions
 {
@@ -26,6 +28,9 @@ class SearchAdsFunctions
 
     public function findAds($authId = null){
 
+        Log::channel('process')->info('1- Processo iniciado');
+        Log::channel('process')->info('2- $authId:' . $authId);
+
         //Se $authId == null, então busca de todos os sellers, senão busca do seller específico.
         if($authId){
             // 1 - Busca de um seller específico
@@ -39,9 +44,10 @@ class SearchAdsFunctions
         //$allProducts = $this->product_provider_connections->getMinimalDataFromProducts()->toArray();
 
         foreach($allAuthentications as $channels){
-
+            
             switch ($channels['code']) {
                 case 'MELI':
+                    Log::channel('process')->info('3- Code:' . $channels['code'] . '  User_id: ' . $channels['user_id']);
                     dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, 0, 'default');
                     break;
 
@@ -86,13 +92,14 @@ class SearchAdsFunctions
                     'sellerId' => $sellerId,
                     'userId' => $userId
                 ];
+                Log::channel('process')->info('4- Count:' . count($params['result'] ?? []) . ' userId: ' . $params['userId'] . '  sellerId: ' . $params['sellerId']);
                 dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, 0, 'default');
             }
 
             $count++;
 
             // delay para evitar HTTP 429
-            usleep(500000); // 0.4s
+            usleep(500000); // 0.5s
 
             if ($count >= $limit || empty($scrool)) {
                 break;
@@ -110,6 +117,8 @@ class SearchAdsFunctions
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
+
+            Log::channel('process')->info('5- item_id:' . $item['id'] . ' status: ' . $item['status'] );
 
             if($item['status'] != 'active'){
                 continue;
@@ -206,7 +215,7 @@ class SearchAdsFunctions
 
             $this->publications_connections->storeOrUpdatePublications($toStore);
 
-
+            Log::channel('process')->info('6- item_id:' . $item['id'] . ' Chegou Verificação' );
             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, 0, 'default');
 
         }
@@ -294,7 +303,7 @@ class SearchAdsFunctions
                 $sku = $dataItem['sku'];
                 $ean = $dataItem['ean'];
                 $product = $this->product_provider_connections->findProductBySkuOrEan($sku, $ean);
-
+                Log::channel('process')->info('7- sku:' . $sku . ' ean ' . $ean);
                 if($product){
                     //gerando o job de verificação de preços:
                     $itemId = $dataItem['item_id'];

@@ -133,6 +133,13 @@ return [
             'level' => 'info',
         ],
 
+        'process' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/process.log'),
+            'level'  => 'info',
+            'days'   => 14,
+        ],
+
     ],
 
 ];

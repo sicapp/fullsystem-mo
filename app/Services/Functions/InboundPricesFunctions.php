@@ -10,6 +10,7 @@ use App\Services\DbConnections\ProductProviderConnections;
 use App\Services\DbConnections\PublicationsConnections;
 use App\Services\DbConnections\UserConnections;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class InboundPricesFunctions
 {
@@ -236,11 +237,13 @@ class InboundPricesFunctions
             $this->publications_connections->storeOrUpdatePublications($toStore);
 
             //reprograma o processo
+            Log::channel('process')->info('8- Reprogramado:' . ' idCallBack ' . $idCallBack);
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'default');
             return false;
 
         }
 
+        Log::channel('process')->info('9- Item:' . $itemId . ' salePrice:' . $salePrice . ' minimalPriceToUse ' . $minimalPriceToUse);
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
         if ($salePrice < $minimalPriceToUse){
             //Está abaixo do mínimo.
@@ -266,6 +269,9 @@ class InboundPricesFunctions
             $updatePrice = $this->meli_communications->setItemPrice($itemId, $minimalPriceToUse, $token);
 
             $updateResult = data_get($updatePrice, 'data.price', 0);
+
+            Log::channel('process')->info('10- setItemPrice:' . $updateResult . ' ItemId: ' . $itemId);
+
             if($updateResult > 0){
                 $pauseAdd = false;
                 $dataInfraction['punish'] = 'Iniciada atualização de preço.';
@@ -287,6 +293,7 @@ class InboundPricesFunctions
             if($pauseAdd){
                 $paused = $this->meli_communications->pauseItem($itemId, $token);
                 $resultPause = data_get($paused, 'data.status', false);
+                Log::channel('process')->info('11- PAUSAR:' . $resultPause . ' ItemId: ' . $itemId);
                 if($resultPause == 'paused'){
                     $dataInfraction['punish'] = 'O anúncio foi pausado';
                 }
@@ -310,6 +317,8 @@ class InboundPricesFunctions
             createSystemMessage($messageId, $userId, $title, $messageText, 1);
 
         }
+
+        Log::channel('process')->info('SAINDO - pricesInbound , ItemId: ' . $itemId);
     }
 
     public function checkPricesInbound($dataRecheck){
