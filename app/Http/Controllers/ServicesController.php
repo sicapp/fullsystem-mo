@@ -18,7 +18,7 @@ class ServicesController extends Controller
     public function devTeste(Request $request)
     {
 
-    
+        
         $this->monitoring_function->getItemToMonitoring();
 
         return 'Iniciado getItemToMonitoring';

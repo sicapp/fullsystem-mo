@@ -31,9 +31,10 @@ class InboundPricesFunctions
         $resource = $dataRequest['dataCallback']['reference_id'];
         $attempt = $dataRequest['attempt'];
 
-        //processo iniciado:
-        updateCallback($idCallBack, 1, ['Iniciado processo']);
-
+        if($idCallBack > 0){
+            //processo iniciado:
+            updateCallback($idCallBack, 1, ['Iniciado processo']);
+        }
         //consultar dados do seller:
         $sellerData = $this->authentication_connections->findBy('user_channel_id', $sellerId)->toArray();
         //vendo se está ativo e o token está válido.
@@ -44,12 +45,14 @@ class InboundPricesFunctions
         $minutesLeft = $now->diffInMinutes($target, false);
 
         if($minutesLeft <= 0){
+            Log::channel('process')->info('TOKEN VENCIDO');
             //o token está vencido, então aborta o processo
             updateCallback($idCallBack, 4, ['Token do seller esta vencido!']);
             return false;
         }
 
         if($minutesLeft <= 3){
+            Log::channel('process')->info('TOKEN VENCENDO!');
             //o token está prestes a vencer, então reprograma o processo.
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 300, 'default');
             updateCallback($idCallBack, 3, ['Token do seller esta prestes a vencer, reprogramado processo!']);
@@ -68,6 +71,7 @@ class InboundPricesFunctions
         $itemData = $this->meli_communications->getItemById($token, $itemId);
 
         if(!$itemData['success']){
+            Log::channel('process')->info('ITEM SEM PREÇO: ' . $itemId);
             //Não conseguimos consultar os preços, então aborta o processo
             updateCallback($idCallBack, 3, ['Erro ao consultar o anuncio' => $itemData]);
             return false;
@@ -82,6 +86,7 @@ class InboundPricesFunctions
         $priceData = $this->meli_communications->getItemPrice($token, $resource);
 
         if(!$priceData['success']){
+            Log::channel('process')->info('RESOURCE SEM PREÇO: ', $resource);
             //Não conseguimos consultar os preços, então aborta o processo
             updateCallback($idCallBack, 3, ['Erro ao consultar os preços' => $priceData]);
             return false;
