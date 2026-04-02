@@ -3,14 +3,13 @@
 
 namespace App\Services\Functions;
 
-use App\Models\Publications;
 use App\Services\Communications\ERP\BLING\BlingCommunications;
 use App\Services\Communications\MARKETPLACE\MELI\MeliCommunications;
+use App\Services\Communications\MARKETPLACE\SHOPEE\ShopeeCommunications;
 use App\Services\DbConnections\AuthenticationConnections;
 use App\Services\DbConnections\ProductProviderConnections;
 use App\Services\DbConnections\ProductRelationConnections;
 use App\Services\DbConnections\PublicationsConnections;
-use Illuminate\Support\Facades\Log;
 
 
 class SearchAdsFunctions
@@ -18,12 +17,13 @@ class SearchAdsFunctions
 	//FUNÇÃO PARA BUSCA DE ANÚNCIOS DOS SELLERS
 
     public function __construct(
-        protected AuthenticationConnections $authentication_connections,
-        protected ProductProviderConnections $product_provider_connections,
-        protected ProductRelationConnections $product_relation_connections,
-        protected PublicationsConnections $publications_connections,
-        protected MeliCommunications $meli_communications,
-        protected BlingCommunications $bling_communications
+        protected AuthenticationConnections     $authentication_connections,
+        protected ProductProviderConnections    $product_provider_connections,
+        protected ProductRelationConnections    $product_relation_connections,
+        protected PublicationsConnections       $publications_connections,
+        protected MeliCommunications            $meli_communications,
+        protected BlingCommunications           $bling_communications,
+        protected ShopeeCommunications          $shopee_communications,
     ) {}
 
     public function findAds($authId = null){
@@ -51,7 +51,11 @@ class SearchAdsFunctions
 
                 case 'BLING':
                     dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdBling', $channels, $delay, 'default');
-                    break;    
+                    break; 
+                    
+                case 'SHOPEE':
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdShopee', $channels, $delay, 'default');
+                    break; 
 
                 default:
                     # code...
@@ -70,8 +74,6 @@ class SearchAdsFunctions
         $userId = $params['user_id'];
 
         $scrool = null;
-        $allResults = [];
-        $limit = 10;
         $count = 0;
         $delay = 0;
 
@@ -101,7 +103,7 @@ class SearchAdsFunctions
 
             $count++;
 
-            if ($count >= $limit || empty($scrool)) {
+            if (empty($scrool)) {
                 break;
             }
 
@@ -298,6 +300,208 @@ class SearchAdsFunctions
             }
         }
 
+    }
+
+    //shopee
+    public function getAdShopee($params){
+        // Implementação para obter anúncios do Shopee
+        $sellerId = $params['user_channel_id'];
+        $userId = $params['user_id'];
+
+        $offset = 0;
+        $limit = 20;
+        $count = 0;
+        $delay = 0;
+        $itemStatus = 'NORMAL';
+        $while = true;
+
+        $refList = $this->getDataProducts();
+
+        while ($while) {
+            //Busca a lista de anuncios na Shopee
+            $tempResult = $this->shopee_communications->getItemList($sellerId, $offset, $limit, $itemStatus);
+            $dataItem   = data_get($tempResult, 'data.response.item');
+
+            if ($dataItem) {
+                $paramsItem = [
+                    'result' => $dataItem,
+                    'sellerId' => $sellerId,
+                    'userId' => $userId,
+                    'refList' => $refList,
+                ];
+                $delay += 0.5;
+
+                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdShopee', $paramsItem, $delay, 'default');
+                
+                //atualiza o offset
+                $offset = data_get($tempResult, 'data.response.next_offset');
+            }else{
+                //sair do while
+                $while = false;
+                
+            }
+
+            $count++;
+
+            if (empty($offset)) {
+                //sair do while
+                $while = false;
+            }
+
+            //Trava de segurança para evitar loop infinito e limita a busca de 20.000 anúncios
+            if($count > 1000){
+                $while = false;
+            }
+
+
+        }
+    }
+    public function getDetailsAdShopee($result)
+    {
+        $itemsGroup = $result['result'];
+        $sellerId = $result['sellerId'];
+        $userId = $result['userId'];
+        $delay = 0;
+        $refList = $result['refList'];
+        $itemsData = null;
+        $modelData = null;
+        $toStore = [];
+
+        foreach($itemsGroup as $item){
+            
+            $itemsDataShopee = $this->shopee_communications->getItemBaseInfo($sellerId, $item['item_id']);
+            $itemData = data_get($itemsDataShopee, 'data.response.item_list.0');
+            $hasModel = data_get($itemData, 'has_model', false);
+            
+            if($hasModel){
+                //produto com variações
+                $modelDataShopee = $this->shopee_communications->getModelList($sellerId, $item['item_id']);
+                $modelData = data_get($modelDataShopee, 'data.response');
+                $tierVariation = $modelData['tier_variation'] ?? [];
+
+                foreach($modelData['model'] as $model){
+
+                    $fsItem = (in_array($model['model_sku'], $refList) || in_array($model['gtin_code'], $refList));
+                    $prices = [];
+                    $prices = [
+                        'price' => $model['current_price'] ?? null,
+                        'base_price' => $model['original_price'] ?? null,
+                        'original_price' => $model['original_price'] ?? null,
+                    ];
+
+                    $variations = [];
+                    $variations = [
+                        'id' => $model['model_id'],
+                        'price' => $model['price_info'][0]['current_price'] ?? null,
+                        'attribute_name' => $model['model_name'],
+                        'attribute_value' => null,
+                        'available_quantity' => $model['stock_info_v2']['summary_info']['total_available_stock'],
+                        'sold_quantity' => null,
+                        'user_product_id' => null
+                    ];
+
+                    //pegando o tier_variation
+                    $varName = null;
+                    foreach($model['tier_index'] as $tier){
+                        foreach($tierVariation as $variation){
+                            if(!$varName){
+                                $varName = $variation['name'] . ':' . $variation['option_list'][$tier]['option'];
+                            }else{
+                                $varName .= '|' . $variation['name'] . ':' . $variation['option_list'][$tier]['option'];
+                            }
+                            
+                        }
+                    }
+                    
+                    $params = [];
+                    $params = [
+                        'category_id' =>  $itemData['category_id'] ?? null,
+                        'image' =>  $itemData['image']['image_url_list'] ?? null,
+                        'weight' =>  $itemData['weight'] ?? null,
+                        'dimension' =>  $itemData['dimension'] ?? null,
+                        'logistic_info' =>  $itemData['logistic_info'] ?? null,
+                        'wholesales' =>  $itemData['wholesales'] ?? null,
+                        'condition' =>  $itemData['condition'] ?? null,
+                        'has_promotion' =>  $itemData['has_promotion'] ?? null,
+                        'brand' =>  $itemData['brand'] ?? null,
+                        'deboost' =>  $itemData['deboost'] ?? null,
+                        'is_fulfillment_by_shopee' =>  $itemData['is_fulfillment_by_shopee'] ?? null,
+                        'tag' =>  $itemData['tag'] ?? null
+                    ];
+
+                    $toStore[] = [
+                        'origin' => "SHOPEE",
+                        'user_id' => $userId,
+                        'item_id' => $itemData['item_id'],
+                        'variation_id' => $model['model_id'],
+                        'seller_id' => $sellerId,
+                        'sku' => $model['model_sku'],
+                        'ean' => $model['gtin_code'],
+                        'title' => $itemData['item_name'] . ' - ' . $varName,
+                        'status' => 'active',
+                        'fs_item' => $fsItem,
+                        'prices' => json_encode($prices),
+                        'variations' => json_encode($variations),
+                        'params' => json_encode($params),
+                        'created_at'  => dateUtc(),
+                        'updated_at'  => dateUtc()
+                    ];
+
+                }
+
+            }else{
+                //produto sem variações
+                $fsItem = (in_array($itemData['item_sku'], $refList) || in_array($itemData['gtin_code'], $refList));
+
+                $prices = [];
+                $prices = [
+                    'price' => $itemData['price_info'][0]['current_price'] ?? null,
+                    'base_price' => $itemData['price_info'][0]['original_price'] ?? null,
+                    'original_price' => $itemData['price_info'][0]['original_price'] ?? null,
+                ];
+
+                $params = [];
+                $params = [
+                    'category_id' =>  $itemData['category_id'] ?? null,
+                    'image' =>  $itemData['image']['image_url_list'] ?? null,
+                    'weight' =>  $itemData['weight'] ?? null,
+                    'dimension' =>  $itemData['dimension'] ?? null,
+                    'logistic_info' =>  $itemData['logistic_info'] ?? null,
+                    'wholesales' =>  $itemData['wholesales'] ?? null,
+                    'condition' =>  $itemData['condition'] ?? null,
+                    'has_promotion' =>  $itemData['has_promotion'] ?? null,
+                    'brand' =>  $itemData['brand'] ?? null,
+                    'deboost' =>  $itemData['deboost'] ?? null,
+                    'is_fulfillment_by_shopee' =>  $itemData['is_fulfillment_by_shopee'] ?? null,
+                    'tag' =>  $itemData['tag'] ?? null
+                ];
+
+                $toStore[] = [
+                    'origin' => "SHOPEE",
+                    'user_id' => $userId,
+                    'item_id' => $itemData['item_id'],
+                    'variation_id' => 0,
+                    'seller_id' => $sellerId,
+                    'sku' => $itemData['item_sku'],
+                    'ean' => $itemData['gtin_code'],
+                    'title' => $itemData['item_name'],
+                    'status' => 'active',
+                    'fs_item' => $fsItem,
+                    'prices' => json_encode($prices),
+                    'variations' => '[]',
+                    'params' => json_encode($params),
+                    'created_at'  => dateUtc(),
+                    'updated_at'  => dateUtc()
+                ];
+
+            }
+            usleep(500000); // 0.5s Delay para evitar http 429
+        }
+
+        $this->publications_connections->storeOrUpdatePublications($toStore);
+
+        // $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
+        // dd($result, $itemsIds);
     }
 
 

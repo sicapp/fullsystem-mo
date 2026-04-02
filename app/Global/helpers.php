@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\DbConnections\AuthenticationConnections;
 use Carbon\Carbon;
 use App\Services\DbConnections\CallbackConnections;
 use App\Services\DbConnections\MessageConnections;
@@ -125,5 +126,27 @@ if (! function_exists('brMoney')) {
     function brMoney($v)
     {
         return $v === null || $v === '' ? '' : 'R$ ' . number_format((float) $v, 2, ',', '.');
+    }
+}
+
+if (!function_exists('getTokenShopee')) {
+    function getTokenShopee($channelId, $allData = false) {
+        try {
+            $authenticationConnections = new AuthenticationConnections;
+
+            $auth = $authenticationConnections->findBy('user_channel_id', $channelId);
+
+            if ($auth) {
+                if($allData){
+                    return $auth;
+                }
+                return $auth->token;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            // Se quiser, pode logar esse erro
+            return null;
+        }
     }
 }

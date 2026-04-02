@@ -45,4 +45,12 @@ return [
         'url' => env('MELI_MLB', 'https://api.mercadolibre.com')
     ],
 
+    'shopee' => [
+        'host' => env('SHOPEE_HOST'),
+        'auth_host' => env('SHOPEE_AUTH_HOST'),
+        'partner_id' => env('SHOPEE_PARTNER_ID'),
+        'partner_key' => env('SHOPEE_API_KEY'),
+        'auth_callback' => env('SHOPEE_AUTH_CALLBACK'),
+    ],
+
 ];
