@@ -67,49 +67,153 @@ class SearchAdsFunctions
     }
 
     //Mercado Livre
-    public function getAdMeli($params){
+    // public function getAdMeli($params){
 
+    //     $token = $params['token'];
+    //     $sellerId = $params['user_channel_id'];
+    //     $userId = $params['user_id'];
+
+    //     $scrool = null;
+    //     $count = 0;
+    //     $delay = 0;
+
+    //     $refList = $this->getDataProducts();
+
+    //     $while = true;
+
+    //     while ($while) {
+
+    //         $tempResult = $this->meli_communications->getPublications(
+    //             $token,
+    //             $sellerId,
+    //             $scrool
+    //         );
+
+    //         $scrool = $tempResult['data']['scroll_id'] ?? null;
+
+    //         if (!empty($tempResult['data']['results']) && is_array($tempResult['data']['results'])) {
+    //             $params = [
+    //                 'result' => $tempResult['data']['results'],
+    //                 'token' => $token,
+    //                 'sellerId' => $sellerId,
+    //                 'userId' => $userId,
+    //                 'refList' => $refList,
+    //             ];
+    //             $delay += 0.5;
+    //             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, $delay, 'default');
+    //         }
+
+    //         $count++;
+
+    //         if (empty($scrool)) {
+    //             $while = false;
+    //         }
+
+    //         //Trava de segurança para evitar loop infinito e limita a busca de 20.000 anúncios
+    //         if($count > 1000){
+    //             $while = false;
+    //         }
+
+    //         // delay para evitar HTTP 429
+    //         usleep(500000); // 0.5s
+
+    //     }
+
+    // }
+    public function getAdMeli(array $params): void
+    {
         $token = $params['token'];
         $sellerId = $params['user_channel_id'];
         $userId = $params['user_id'];
 
-        $scrool = null;
+        $scrollId = null;
+        $lastScrollId = null;
         $count = 0;
-        $delay = 0;
+        $jobDelay = 0;
 
         $refList = $this->getDataProducts();
 
         while (true) {
-
-            $tempResult = $this->meli_communications->getPublications(
+            $response = $this->meli_communications->getPublications(
                 $token,
                 $sellerId,
-                $scrool
+                $scrollId
             );
 
-            $scrool = $tempResult['data']['scroll_id'] ?? null;
+            if (!empty($response['error'])) {
+                logger()->warning('Falha ao buscar publicacoes no Mercado Livre', [
+                    'seller_id' => $sellerId,
+                    'user_id' => $userId,
+                    'scroll_id' => $scrollId,
+                    'response' => $response,
+                ]);
+                break;
+            }
 
-            if (!empty($tempResult['data']['results']) && is_array($tempResult['data']['results'])) {
-                $params = [
-                    'result' => $tempResult['data']['results'],
+            $data = $response['data'] ?? null;
+            $results = $data['results'] ?? [];
+            $nextScrollId = $data['scroll_id'] ?? null;
+
+            if (!is_array($results)) {
+                logger()->warning('Resposta inesperada ao buscar publicacoes no Mercado Livre', [
+                    'seller_id' => $sellerId,
+                    'user_id' => $userId,
+                    'scroll_id' => $scrollId,
+                    'response' => $response,
+                ]);
+                break;
+            }
+
+            if (!empty($results)) {
+                $jobParams = [
+                    'result' => $results,
                     'token' => $token,
                     'sellerId' => $sellerId,
                     'userId' => $userId,
                     'refList' => $refList,
                 ];
-                $delay += 0.5;
-                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, $delay, 'default');
+
+                $jobDelay += 0.5;
+                dispatchGenericJob(
+                    \App\Services\Functions\SearchAdsFunctions::class,
+                    'getDetailsAdMeli',
+                    $jobParams,
+                    $jobDelay,
+                    'default'
+                );
             }
 
             $count++;
 
-            if (empty($scrool)) {
+            if (empty($nextScrollId)) {
                 break;
             }
 
-        }
+            if ($nextScrollId === $lastScrollId) {
+                logger()->warning('scroll_id repetido na busca de publicacoes do Mercado Livre', [
+                    'seller_id' => $sellerId,
+                    'user_id' => $userId,
+                    'scroll_id' => $nextScrollId,
+                ]);
+                break;
+            }
 
+            if ($count >= 1000) {
+                logger()->warning('Limite de iteracoes atingido na busca de publicacoes do Mercado Livre', [
+                    'seller_id' => $sellerId,
+                    'user_id' => $userId,
+                    'count' => $count,
+                ]);
+                break;
+            }
+
+            $lastScrollId = $scrollId;
+            $scrollId = $nextScrollId;
+
+            usleep(500000); // 0.5s para reduzir risco de HTTP 429
+        }
     }
+
     public function getDetailsAdMeli($result){
         $token = $result['token'];
         $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
@@ -234,69 +338,80 @@ class SearchAdsFunctions
         $sellerId = $params['user_channel_id'];
         $toStore = [];
         $userId = $params['user_id'];
-        $limit = 10;
-        $count = 0;
+        $count = 1;
         $page = 1;
 
-        while(true){
+        $while = true;
+
+        while($while){
             $tempResult = $this->bling_communications->getAllProducts($token, $page);
             $countItems = count($tempResult['data']);
 
-            //processar os itens
-            foreach(($tempResult['data'] ?? []) as $dataItem){
+            if($countItems > 0){
 
-                if($dataItem['formato'] == 'V'){
-                    continue;
-                    // Se for produto PAI não registramos, registraremos apenas as variações.
+                //processar os itens
+                foreach(($tempResult['data'] ?? []) as $dataItem){
+
+                    if($dataItem['formato'] == 'V'){
+                        continue;
+                        // Se for produto PAI não registramos, registraremos apenas as variações.
+                    }
+
+                    //se tiver ID de produto pai, então é uma variação:
+                    if($dataItem['idProdutoPai'] ?? false){
+                        //é variação
+                        $itemId = $dataItem['idProdutoPai'];
+                        $varId = $dataItem['id'];
+                    }else{
+                        //não é variação
+                        $itemId = $dataItem['id'];
+                        $varId = 0;
+                    }
+
+                    $params = [
+                        'idProdutoPai' => $dataItem['idProdutoPai'] ?? null,
+                        'stock' => $dataItem['estoque'] ?? null,
+                        'type' => $dataItem['tipo'] ?? null,
+                        'format' => $dataItem['formato'] ?? null,
+                        'imageURL' => $dataItem['imagemURL'] ?? null,
+                    ];
+
+                    $toStore[] = [
+                        'origin' => "BLING",
+                        'user_id' => $userId,
+                        'item_id' => $itemId,
+                        'variation_id' => $varId,
+                        'seller_id' => $sellerId,
+                        'sku' => $dataItem['codigo'],
+                        'ean' => null,
+                        'title' => $dataItem['nome'],
+                        'status' => $dataItem['situacao'],
+                        'prices' => json_encode(['price' => $dataItem['preco']]),
+                        'variations' => json_encode([]),
+                        'params' => json_encode(['idProdutoPai' => $dataItem['idProdutoPai'] ?? null]),
+                        'created_at'  => dateUtc(),
+                        'updated_at'  => dateUtc()
+                    ];
+
                 }
 
-                //se tiver ID de produto pai, então é uma variação:
-                if($dataItem['idProdutoPai'] ?? false){
-                    //é variação
-                    $itemId = $dataItem['idProdutoPai'];
-                    $varId = $dataItem['id'];
-                }else{
-                    //não é variação
-                    $itemId = $dataItem['id'];
-                    $varId = 0;
-                }
-
-                $params = [
-                    'idProdutoPai' => $dataItem['idProdutoPai'] ?? null,
-                    'stock' => $dataItem['estoque'] ?? null,
-                    'type' => $dataItem['tipo'] ?? null,
-                    'format' => $dataItem['formato'] ?? null,
-                    'imageURL' => $dataItem['imagemURL'] ?? null,
-                ];
-
-                $toStore[] = [
-                    'origin' => "BLING",
-                    'user_id' => $userId,
-                    'item_id' => $itemId,
-                    'variation_id' => $varId,
-                    'seller_id' => $sellerId,
-                    'sku' => $dataItem['codigo'],
-                    'ean' => null,
-                    'title' => $dataItem['nome'],
-                    'status' => $dataItem['situacao'],
-                    'prices' => json_encode(['price' => $dataItem['preco']]),
-                    'variations' => json_encode([]),
-                    'params' => json_encode(['idProdutoPai' => $dataItem['idProdutoPai'] ?? null]),
-                    'created_at'  => dateUtc(),
-                    'updated_at'  => dateUtc()
-                ];
-
+                $this->publications_connections->storeOrUpdatePublications($toStore);
+            
+            }else{
+                //sai do while
+                $while = false;
             }
 
-            $this->publications_connections->storeOrUpdatePublications($toStore);
+            $page++;
 
             $count++;
 
             // delay para evitar HTTP 429
             usleep(500000); // 0.5s
 
-            if ($count >= $limit || empty($scrool) || $countItems < 100) {
-                break;
+            //Trava de segurança para evitar loop infinito e limita a busca de 10.000 produtos
+            if($count > 100){
+                $while = false;
             }
         }
 
@@ -353,6 +468,8 @@ class SearchAdsFunctions
                 $while = false;
             }
 
+            // delay para evitar HTTP 429
+            usleep(500000); // 0.5s
 
         }
     }
