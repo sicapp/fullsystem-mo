@@ -478,9 +478,7 @@ class SearchAdsFunctions
         $itemsGroup = $result['result'];
         $sellerId = $result['sellerId'];
         $userId = $result['userId'];
-        $delay = 0;
         $refList = $result['refList'];
-        $itemsData = null;
         $modelData = null;
         $toStore = [];
 
@@ -497,8 +495,10 @@ class SearchAdsFunctions
                 $tierVariation = $modelData['tier_variation'] ?? [];
 
                 foreach($modelData['model'] as $model){
+                    $sku = data_get($model, 'model_sku');
+                    $gtin = data_get($model, 'gtin_code');
 
-                    $fsItem = (in_array($model['model_sku'], $refList) || in_array($model['gtin_code'], $refList));
+                    $fsItem = (in_array($sku, $refList) || in_array($gtin, $refList));
                     $prices = [];
                     $prices = [
                         'price' => $model['current_price'] ?? null,

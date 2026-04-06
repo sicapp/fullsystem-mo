@@ -50,7 +50,19 @@ class ShopeeCommunications extends Communications
         return self::get($uri, $token);
     }
 
-    
+    public function getModelList($shopId, $itemId, $token = null){
+        if(!$token){$token = getTokenShopee($shopId);}
+
+        $path = "/api/v2/product/get_model_list";
+
+        $extraQuery = [
+            'item_id' => $itemId,
+        ];
+
+        $uri = self::calcSign($path, $shopId, $token, $extraQuery);
+
+        return self::get($uri, $token);
+    }    
 	
 // #####################################
 // ######   FUNÇÕES FORA DE USO   ######
@@ -101,19 +113,7 @@ class ShopeeCommunications extends Communications
         return self::get($uri, $token);
     }
 
-    public function getModelList($shopId, $itemId, $token = null){
-        if(!$token){$token = getTokenShopee($shopId);}
 
-        $path = "/api/v2/product/get_model_list";
-
-        $extraQuery = [
-            'item_id' => $itemId,
-        ];
-
-        $uri = self::calcSign($path, $shopId, $token, $extraQuery);
-
-        return self::get($uri, $token);
-    }
 
     public function updatePrice($shopId, $token = null){
         if(!$token){$token = getTokenShopee($shopId);}

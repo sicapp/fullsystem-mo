@@ -19,10 +19,10 @@ class ServicesController extends Controller
 
     public function devTeste(Request $request)
     {
-        $shopId = 226662089;
-        $itemId = 885177652;
-        $result = $this->shopee_communications->getModelList($shopId, $itemId);
-        dd($result);
+        // $shopId = 1721755838;
+        // $itemId = 58254352105;
+        // $result = $this->shopee_communications->getModelList($shopId, $itemId);
+        // dd($result);
         
         $this->monitoring_function->getItemToMonitoring();
 
