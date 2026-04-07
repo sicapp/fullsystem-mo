@@ -30,16 +30,32 @@ class InboundController extends Controller
                 'created_at' => dateUtc(),
                 'updated_at' => dateUtc()
             ];
-
+        }elseif($request->input('origin') == 'SHOPEE'){
+            $dataCallback = [
+                'origin' => $request->input('origin'),
+                'reference' => $request->input('code'),
+                'reference_id' => $request->input('data.item_id') . ':' . $request->input('data.model_id', null),
+                'company_id' => $request->input('shop_id'),
+                'status' => 0,
+                'data' => json_encode($request->all()),
+                'data_status' => null,
+                'created_at' => dateUtc(),
+                'updated_at' => dateUtc()
+            ];
         }
 
         if($dataCallback){
             $idCallBack = $this->callbackConnections->insertGetId($dataCallback, __FUNCTION__);
             if($idCallBack){
-                dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
+                if($request->input('origin') == 'MELI'){
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
+                }elseif($request->input('origin') == 'SHOPEE'){
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInboundShopee', ['idCallBack' => $idCallBack, 'dataCallback' => $dataCallback, 'attempt' => 0], 0, 'default');
+                }
+
             }
         }
-    
+
         return response('ok', 200);
 
     }

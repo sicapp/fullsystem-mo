@@ -62,7 +62,54 @@ class ShopeeCommunications extends Communications
         $uri = self::calcSign($path, $shopId, $token, $extraQuery);
 
         return self::get($uri, $token);
-    }    
+    }
+
+    public function updateModelPrice($shopId, $itemId, $modelId, $originalPrice, $token = null){
+        if(!$token){$token = getTokenShopee($shopId);}
+
+        $path = "/api/v2/product/update_price";
+
+        if(!$modelId){
+            $params = [
+                'item_id' => $itemId,
+                'price_list' => [
+                    [
+                        'model_id' => 0,
+                        'original_price' => $originalPrice
+                    ]
+                ]
+            ];
+        }else{
+            $params = [
+                'item_id' => $itemId,
+                'price_list' => [
+                    [
+                        'model_id' => $modelId,
+                        'original_price' => $originalPrice
+                    ]
+                ]
+            ];
+        }
+
+        $uri = self::calcSign($path, $shopId, $token);
+
+        return self::post($uri, $token, $params);
+    }
+
+    public function updateStatusITem($shopId, $itemId, $status, $token = null){
+        if(!$token){$token = getTokenShopee($shopId);}
+
+        $path = "/api/v2/product/update_item";
+
+        $params = [
+            'item_id' => $itemId,
+            'item_status' => $status
+        ];
+
+        $uri = self::calcSign($path, $shopId, $token);
+
+        return self::post($uri, $token, $params);
+    }
 	
 // #####################################
 // ######   FUNÇÕES FORA DE USO   ######
@@ -115,25 +162,7 @@ class ShopeeCommunications extends Communications
 
 
 
-    public function updatePrice($shopId, $token = null){
-        if(!$token){$token = getTokenShopee($shopId);}
 
-        $path = "/api/v2/product/update_price";
-
-        $params = [
-            'item_id' => 885177652,
-            'price_list' => [
-                [
-                    'model_id' => 8501523581,
-                    'original_price' => 45.40
-                ]
-            ]
-        ];
-
-        $uri = self::calcSign($path, $shopId, $token);
-
-        return self::post($uri, $token, $params);
-    }
 
     public function updateStock($shopId, $token = null){
         if(!$token){$token = getTokenShopee($shopId);}

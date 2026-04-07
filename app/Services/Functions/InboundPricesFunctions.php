@@ -4,6 +4,7 @@
 namespace App\Services\Functions;
 
 use App\Services\Communications\MARKETPLACE\MELI\MeliCommunications;
+use App\Services\Communications\MARKETPLACE\SHOPEE\ShopeeCommunications;
 use App\Services\DbConnections\AuthenticationConnections;
 use App\Services\DbConnections\PriceInfractionsConnections;
 use App\Services\DbConnections\ProductProviderConnections;
@@ -21,11 +22,13 @@ class InboundPricesFunctions
         protected ProductProviderConnections    $product_provider_connections,
         protected UserConnections               $user_connections,
         protected SearchAdsFunctions            $search_ads_functions,
-        protected PriceInfractionsConnections   $price_infractions_connections
+        protected PriceInfractionsConnections   $price_infractions_connections,
+        protected ShopeeCommunications          $shopee_communications,
     ) {}
 
+    // MERCADO LIVRE
     public function pricesInbound($dataRequest){
-    
+  
         $idCallBack = $dataRequest['idCallBack'];
         $sellerId = $dataRequest['dataCallback']['company_id'];
         $resource = $dataRequest['dataCallback']['reference_id'];
@@ -36,7 +39,11 @@ class InboundPricesFunctions
             updateCallback($idCallBack, 1, ['Iniciado processo']);
         }
         //consultar dados do seller:
-        $sellerData = $this->authentication_connections->findBy('user_channel_id', $sellerId)->toArray();
+        $sellerData = $this->authentication_connections->findBy('user_channel_id', $sellerId);
+
+        if($sellerData){
+            $sellerData = $sellerData->toArray();
+        }
         //vendo se está ativo e o token está válido.
         $timestamp = $sellerData['token_valid_at'];
         $target = Carbon::createFromTimestamp($timestamp);
@@ -162,7 +169,7 @@ class InboundPricesFunctions
 
         }
 
-        Log::channel('process')->info('1- Item:' . $itemId . ' Venda:' . $salePrice . ' Minimo: ' . $minimalPriceToUse);
+        // Log::channel('process')->info('1- Item:' . $itemId . ' Venda:' . $salePrice . ' Minimo: ' . $minimalPriceToUse);
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
         if ($salePrice < $minimalPriceToUse){
             //Está abaixo do mínimo.
@@ -227,10 +234,10 @@ class InboundPricesFunctions
             $punish = $dataInfraction['punish'];
             if($punish){
                 $title = 'Infração';
-                $messageText = "O anúncio { $itemId } estava abaixo do preço mínimo. Resultado: { $punish }";
+                $messageText = "O anúncio { $itemId } do Mercado Livre estava abaixo do preço mínimo. Resultado: { $punish }";
             }else{
                 $title = 'Infração';
-                $messageText = "O anúncio { $itemId } está abaixo do preço mínimo. Atualize o preço para no mínimo R$ " . brMoney($minimalPriceToUse);
+                $messageText = "O anúncio { $itemId } do Mercado Livre está abaixo do preço mínimo. Atualize o preço para no mínimo R$ " . brMoney($minimalPriceToUse);
             }
             
             $messageId = "Price_Infraction_" . $itemId . date('y_m_d');
@@ -269,12 +276,235 @@ class InboundPricesFunctions
             if($resultPause == 'paused'){
                 $title = 'Infração';
                 $messageId = "Price_Infraction_" . $itemId . date('y_m_d') . 'rechek';
-                $messageText = "O anúncio { $itemId } estava abaixo do preço mínimo e foi pausado!";
+                $messageText = "O anúncio { $itemId } do Mercado Livre estava abaixo do preço mínimo e foi pausado!";
                 createSystemMessage($messageId, $userId, $title, $messageText, 1);
             }
 
         }
         
+    }
+
+
+    // SHOPEE
+    public function pricesInboundShopee($dataRequest){
+        // Verificar preço, se baix: alerar, Se não altera: pausar
+        $idCallBack = $dataRequest['idCallBack'];
+        $sellerId = $dataRequest['dataCallback']['company_id'];
+        $resource = $dataRequest['dataCallback']['reference_id'];
+        $attempt = $dataRequest['attempt'];
+
+        if($idCallBack > 0){
+            //processo iniciado:
+            updateCallback($idCallBack, 1, ['Iniciado processo']);
+        }
+        //consultar dados do seller:
+        $sellerData = $this->authentication_connections->findBy('user_channel_id', $sellerId);
+
+        if($sellerData){
+            $sellerData = $sellerData->toArray();
+        }
+
+        //vendo se está ativo e o token está válido.
+        $timestamp = $sellerData['token_valid_at'];
+        $target = Carbon::createFromTimestamp($timestamp);
+        $now    = now(); // Carbon::now() em UTC se APP_TIMEZONE=UTC
+
+        $minutesLeft = $now->diffInMinutes($target, false);
+
+        if($minutesLeft <= 0){
+            Log::channel('process')->info('TOKEN VENCIDO');
+            //o token está vencido, então aborta o processo
+            updateCallback($idCallBack, 4, ['Token do seller esta vencido!']);
+            return false;
+        }
+
+        if($minutesLeft <= 3){
+            Log::channel('process')->info('TOKEN VENCENDO!');
+            //o token está prestes a vencer, então reprograma o processo.
+            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 300, 'default');
+            updateCallback($idCallBack, 3, ['Token do seller esta prestes a vencer, reprogramado processo!']);
+        }
+
+        //consultando o usuário do sistema
+        $userData = $this->user_connections->getById($sellerData['user_id']);
+        $userPriceGroupId = $userData['price_group']??null;
+
+        $userId = $userData['id'];
+        $token = $sellerData['token'];
+
+        //verificar se é com ou sem model:
+        $explodeResource = explode(':', $resource);
+        $itemId = (int)$explodeResource[0];
+        $modelId = $explodeResource[1] ?? null;
+
+        //Consultando o item na Shopee
+        $itemData = $this->shopee_communications->getItemBaseInfo($sellerId, (int)$itemId, $token);
+
+        if(!$itemData['success']){
+            Log::channel('process')->info('ITEM SEM PREÇO: ' . $itemId);
+            //Não conseguimos consultar os preços, então aborta o processo
+            updateCallback($idCallBack, 3, ['Erro ao consultar o anuncio' => $itemData]);
+            return false;
+        }
+
+        $item = data_get($itemData, 'data.response.item_list.0');
+
+        //consultando o model se houver
+        if($modelId){
+            $modelData = $this->shopee_communications->getModelList($sellerId, (int)$itemId, $token);
+            if($modelData['success']){
+                $item['model'] = data_get($modelData, 'data.response.model.0', null);
+            }
+        }
+        
+        $itemName = $item['item_name'] . ($item['model'] ? ' - ' . $item['model']['model_name'] : '');
+        $permalink = null;
+
+        //buscando o preço do anúncio.
+        if($item['model']){
+            $salePrice = $item['model']['price_info'][0]['current_price'] ?? 9999999999;
+            $modelId = $item['model']['model_id'];
+            // $itemSku = $item['model']['model_sku'] ?? null;
+            // $itemEan = $item['model']['gtin_code'] ?? null;
+        }else{
+            $salePrice = $item['price_info'][0]['current_price'] ?? 9999999999;
+            $modelId = 0;
+            // $itemSku = $item['item_sku'] ?? null;
+            // $itemEan = $item['gtin_code'] ?? null;
+        }
+
+        //vamos buscar a publicação no nosso banco:  07330305AA
+        $publications = $this->publications_connections->findAllBy('item_id', $itemId);
+
+        if(count($publications) > 0){
+            $groupName = null;
+            foreach($publications as $pubData){
+
+                $sku = $pubData['sku'];
+                $ean = $pubData['ean'];
+
+                $productData = null;
+                $productData = $this->product_provider_connections->findBy('sku', $sku);
+
+                if(!$productData){
+                    //Não encontrou o produto cadastrado com esse SKU, então procuramos pelo ean:
+                    $productData = $this->product_provider_connections->findBy('ean', $ean);
+                }
+
+                if(!$productData){
+                    updateCallback($idCallBack, 3, ['Attempt' => $attempt, 'message' => 'Produto não existe no sistema!']);
+                    return false;
+                }
+
+                $pricesGroups = json_to_array($productData['prices_group'] ?? []);
+
+                $minimalPriceToUse = 0;
+
+                //Se o usuário não tem pricegroup ou o produto não tem pricegroup, consultar o valor padrão.
+                if(!$userPriceGroupId || !$pricesGroups){
+                    $minimalPriceToUse = $productData['price_minimal'];
+                }else{
+                    foreach($pricesGroups as $pGroup){
+                        if($pGroup['id'] == $userPriceGroupId){
+                            $minimalPriceToUse = data_get($pGroup, 'values.shopee.minimum_selling', 0);
+                            if($minimalPriceToUse == 0){    
+                                $minimalPriceToUse = data_get($pGroup, 'values.outros.minimum_selling', 0);
+                            }
+                            $groupName = $pGroup['name'];
+                            break;
+                        }
+                    }
+                }
+            }
+
+        }else{
+            //Não temos os dados desse produto, então vamos cadastrar;
+
+            //Evitando loop infinito
+            if($attempt > 0){
+                //já tentou uma vez então aborta o processo e registra o erro
+                updateCallback($idCallBack, 3, ['Attempt' => $attempt, 'message' => 'Nao conseguimos salvar a publicacao!']);
+                return false;
+            }
+
+
+            //reprograma o processo
+            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'default');
+            updateCallback($idCallBack, 2, ['message' => 'Não tinhamos o anuncio, estamos criando o cadastro e reprogramando verificação.']);
+            return false;
+
+        }
+
+        // Log::channel('process')->info('1- Item:' . $itemId . ' Venda:' . $salePrice . ' Minimo: ' . $minimalPriceToUse);
+        // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
+
+        if ($salePrice < $minimalPriceToUse){
+            //Está abaixo do mínimo.
+            $dataInfraction = [
+                'user_id' => $userId,
+                'seller_id' => $sellerId,
+                'sku' => $sku,
+                'channel' => 'SHOPEE',
+                'product_name' => $itemName,
+                'minimal_price' => $minimalPriceToUse,
+                'announcement_price' => $salePrice,
+                'price_group_id' => $userPriceGroupId,
+                'price_group_name' => $groupName,
+                'punish' => null,
+                'item_id' => $itemId,
+                'url' => $permalink,
+                'created_at' => dateUtc()
+            ];
+
+            $pauseAdd = true;
+
+            //1 - Tentar ajustar o preço
+
+            $updatePrice = $this->shopee_communications->updateModelPrice($sellerId, $itemId, $modelId, $minimalPriceToUse, $token);
+
+            $updateResult = data_get($updatePrice, 'data.response.success_list.0.original_price', 0);
+
+            updateCallback($idCallBack, 2, [$updatePrice]);
+
+            if($updateResult > 0){
+                $pauseAdd = false;
+                $dataInfraction['punish'] = 'Iniciada atualização de preço.';
+            }
+            
+            //2 - Pausar anúncio se não conseguiu atualizar os preços.
+            if($pauseAdd){
+                $paused = $this->shopee_communications->updateStatusITem($sellerId, $itemId, 'UNLIST', $token);
+
+                $resultPause = data_get($paused, 'success', false);
+
+                if($resultPause == 'paused'){
+                    $dataInfraction['punish'] = 'O anúncio foi pausado';
+                }
+            }
+
+            //3 - Registrar a infração.
+            $infraction = $this->price_infractions_connections->insertGetId($dataInfraction);
+
+            //4 - Enviar mensagem ao usuário.
+            $punish = $dataInfraction['punish'];
+            if($punish){
+                $title = 'Infração';
+                $messageText = "O anúncio { $itemId } da Shopee estava abaixo do preço mínimo. Resultado: { $punish }";
+            }else{
+                $title = 'Infração';
+                $messageText = "O anúncio { $itemId } da Shopee está abaixo do preço mínimo. Atualize o preço para no mínimo R$ " . brMoney($minimalPriceToUse);
+            }
+            
+            $messageId = "Price_Infraction_" . $itemId . date('y_m_d');
+
+            createSystemMessage($messageId, $userId, $title, $messageText, 1);
+
+        }else{
+            updateCallback($idCallBack, 2, ['Produto dentro do preço mínimo' => ['minimo' => $minimalPriceToUse, 'anuncio' => $salePrice]]);
+        }
+
+        Log::channel('process')->info('SAINDO - pricesInbound , ItemId: ' . $itemId);
+    
     }
 
     //Funções auxiliares
