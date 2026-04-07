@@ -300,12 +300,12 @@ class InboundPricesFunctions
         //consultar dados do seller:
         $sellerData = $this->authentication_connections->findBy('user_channel_id', $sellerId);
 
-        if($sellerData){
+        if(isset($sellerData->user_id)){
             $sellerData = $sellerData->toArray();
         }
 
         //vendo se está ativo e o token está válido.
-        $timestamp = $sellerData['token_valid_at'];
+        $timestamp = $sellerData['token_valid_at'] ;
         $target = Carbon::createFromTimestamp($timestamp);
         $now    = now(); // Carbon::now() em UTC se APP_TIMEZONE=UTC
 
@@ -353,7 +353,13 @@ class InboundPricesFunctions
         if($modelId){
             $modelData = $this->shopee_communications->getModelList($sellerId, (int)$itemId, $token);
             if($modelData['success']){
-                $item['model'] = data_get($modelData, 'data.response.model.0', null);
+                foreach($modelData['data']['response']['model'] as $key => $model){
+                    if($model['model_id'] == $modelId){
+                        $item['model'] = $model;
+                        break;
+                    }
+                }
+                
             }
         }
         
