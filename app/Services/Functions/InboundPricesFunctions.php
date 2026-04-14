@@ -362,9 +362,9 @@ class InboundPricesFunctions
                 
             }
         }
-        
+
         $itemName = $item['item_name'] . ($item['model'] ? ' - ' . $item['model']['model_name'] : '');
-        $permalink = null;
+        $permalink = "https://shopee.com.br/product/" . $sellerId . "/" . $itemId . "/";
 
         //buscando o preço do anúncio.
         if($item['model']){
