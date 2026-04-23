@@ -510,6 +510,21 @@ class InboundPricesFunctions
         }
 
         Log::channel('process')->info('SAINDO - pricesInbound , ItemId: ' . $itemId);
+
+        $paramsItem = [
+            'result' => [
+                [
+                    "item_id" => $item['item_id'],
+                    "item_status" => $item['item_status'] ?? null,
+                    "update_time" => $item['update_time'] ?? null,
+                    "tag" => $item['tag'] ?? [],
+                ]
+            ],
+            'sellerId' => $sellerId,
+            'userId' => $userId,
+            'refList' => $this->getDataProducts(),
+        ];
+        dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdShopee', $paramsItem, 0, 'default');
     
     }
 
@@ -619,6 +634,23 @@ class InboundPricesFunctions
         }
 
         $this->publications_connections->storeOrUpdatePublications($toStore);
+    }
+
+    private function getDataProducts(){
+        $products = $this->product_provider_connections->getAll();
+
+        $refist = [];
+
+        foreach($products as $product){
+            if($product['sku']){
+                $refist[] = $product['sku'];
+            }
+            if($product['ean']){
+                $refist[] = $product['ean'];
+            }
+        }
+        
+        return $refist;
     }
 
     // private function getAttributeValue(array $attributes, string $id): ?string

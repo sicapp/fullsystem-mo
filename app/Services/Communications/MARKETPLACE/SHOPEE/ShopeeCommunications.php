@@ -71,21 +71,21 @@ class ShopeeCommunications extends Communications
 
         if(!$modelId){
             $params = [
-                'item_id' => $itemId,
+                'item_id' => (int)$itemId,
                 'price_list' => [
                     [
                         'model_id' => 0,
-                        'original_price' => $originalPrice
+                        'original_price' => (float)$originalPrice
                     ]
                 ]
             ];
         }else{
             $params = [
-                'item_id' => $itemId,
+                'item_id' => (int)$itemId,
                 'price_list' => [
                     [
-                        'model_id' => $modelId,
-                        'original_price' => $originalPrice
+                        'model_id' => (int)$modelId,
+                        'original_price' => (float)$originalPrice
                     ]
                 ]
             ];
@@ -102,7 +102,7 @@ class ShopeeCommunications extends Communications
         $path = "/api/v2/product/update_item";
 
         $params = [
-            'item_id' => $itemId,
+            'item_id' => (int)$itemId,
             'item_status' => $status
         ];
 

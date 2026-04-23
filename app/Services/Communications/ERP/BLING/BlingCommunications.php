@@ -16,6 +16,7 @@ class BlingCommunications
         $url = config('services.bling.url') . 'empresas/me/dados-basicos';
 
         $response = Http::withToken($token)
+            ->withHeaders(['enable-jwt' => '1'])
             ->acceptJson()
             ->get($url);
 
@@ -27,6 +28,7 @@ class BlingCommunications
         $url = config('services.bling.url') . "/produtos?codigos[]=$sku";
 
         $response = Http::withToken($token)
+            ->withHeaders(['enable-jwt' => '1'])
             ->acceptJson()
             ->get($url);
 
@@ -38,6 +40,7 @@ class BlingCommunications
         $url = config('services.bling.url') . "/produtos?pagina={$page}&limite=100&criterio=1";
 
         $response = Http::withToken($token)
+            ->withHeaders(['enable-jwt' => '1'])
             ->acceptJson()
             ->get($url);
 
