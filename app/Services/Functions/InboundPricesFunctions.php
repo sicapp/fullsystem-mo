@@ -33,6 +33,7 @@ class InboundPricesFunctions
         $sellerId = $dataRequest['dataCallback']['company_id'];
         $resource = $dataRequest['dataCallback']['reference_id'];
         $attempt = $dataRequest['attempt'];
+        $fsitem = true;
 
         if($idCallBack > 0){
             //processo iniciado:
@@ -52,16 +53,14 @@ class InboundPricesFunctions
         $minutesLeft = $now->diffInMinutes($target, false);
 
         if($minutesLeft <= 0){
-            Log::channel('process')->info('TOKEN VENCIDO');
             //o token está vencido, então aborta o processo
             updateCallback($idCallBack, 4, ['Token do seller esta vencido!']);
             return false;
         }
 
         if($minutesLeft <= 3){
-            Log::channel('process')->info('TOKEN VENCENDO!');
             //o token está prestes a vencer, então reprograma o processo.
-            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 300, 'default');
+            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 300, 'anuMeli');
             updateCallback($idCallBack, 3, ['Token do seller esta prestes a vencer, reprogramado processo!']);
         }
 
@@ -78,7 +77,6 @@ class InboundPricesFunctions
         $itemData = $this->meli_communications->getItemById($token, $itemId);
 
         if(!$itemData['success']){
-            Log::channel('process')->info('ITEM SEM PREÇO: ' . $itemId);
             //Não conseguimos consultar os preços, então aborta o processo
             updateCallback($idCallBack, 3, ['Erro ao consultar o anuncio' => $itemData]);
             return false;
@@ -93,17 +91,30 @@ class InboundPricesFunctions
         $priceData = $this->meli_communications->getItemPrice($token, $resource);
 
         if(!$priceData['success']){
-            Log::channel('process')->info('RESOURCE SEM PREÇO: ', $resource);
             //Não conseguimos consultar os preços, então aborta o processo
             updateCallback($idCallBack, 3, ['Erro ao consultar os preços' => $priceData]);
             return false;
         }
 
+        //verificando se tem preços de atacado ()
+        $wholesale = in_array('standard_price_by_quantity', $item['tags']);
+        if($wholesale){
+            // Remover preços de atacado
+            $priceDefaultId = data_get($priceData, 'data.prices.0.id');
+            $remove = $this->meli_communications->removeWholesalePrice($token, $itemId, $priceDefaultId);
+            
+            if($remove['success']){
+                dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 5, 'anuMeli');
+                updateCallback($idCallBack, 3, ['Preço por atacado removido!']);
+            }
+        }
+        
         $salePrice = 9999999999;
         //passou, então vamos verificar o menor preço praticado pelo anúncio:
         foreach($priceData['data']['prices'] as $value) {
-            if($value['amount'] < $salePrice){
-                $salePrice = $value['amount'];
+            $ammount = $value['amount'];
+            if($ammount < $salePrice){
+                $salePrice = $ammount;
             }
         }
 
@@ -127,6 +138,8 @@ class InboundPricesFunctions
 
                 if(!$productData){
                     updateCallback($idCallBack, 3, ['Attempt' => $attempt, 'message' => 'Produto não existe no sistema!']);
+
+                    $fsitem = false;
                     return false;
                 }
 
@@ -148,7 +161,7 @@ class InboundPricesFunctions
                 }
             }
 
-            $this->updateProduct($item, $token, $itemId, $userId);
+            $this->updateProduct($item, $token, $itemId, $userId, $fsitem);
 
         }else{
             //Não temos os dados desse produto, então vamos cadastrar;
@@ -157,13 +170,14 @@ class InboundPricesFunctions
             if($attempt > 0){
                 //já tentou uma vez então aborta o processo e registra o erro
                 updateCallback($idCallBack, 3, ['Attempt' => $attempt, 'message' => 'Nao conseguimos salvar a publicacao!']);
+
                 return false;
             }
 
-            $this->updateProduct($item, $token, $itemId, $userId);
+            $this->updateProduct($item, $token, $itemId, $userId, $fsitem);
 
             //reprograma o processo
-            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'default');
+            dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'anuMeli');
             updateCallback($idCallBack, 2, ['message' => 'Não tinhamos o anuncio, estamos criando o cadastro e reprogramando verificação.']);
             return false;
 
@@ -171,6 +185,7 @@ class InboundPricesFunctions
 
         // Log::channel('process')->info('1- Item:' . $itemId . ' Venda:' . $salePrice . ' Minimo: ' . $minimalPriceToUse);
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
+
         if ($salePrice < $minimalPriceToUse){
             //Está abaixo do mínimo.
             $dataInfraction = [
@@ -202,7 +217,13 @@ class InboundPricesFunctions
 
             if($updateResult > 0){
                 $pauseAdd = false;
-                $dataInfraction['punish'] = 'Iniciada atualização de preço.';
+                if($wholesale ?? false){
+                    $dataInfraction['punish'] = 'Preço por atacado removido.';
+                }else{
+                    $dataInfraction['punish'] = 'Iniciada atualização de preço.';
+                }
+
+                
 
                 //Rodar o Job de confirmação.
                 $dataRecheck = [
@@ -219,6 +240,7 @@ class InboundPricesFunctions
             
             //2 - Pausar anúncio se não conseguiu atualizar os preços.
             if($pauseAdd){
+
                 $paused = $this->meli_communications->pauseItem($itemId, $token);
                 $resultPause = data_get($paused, 'data.status', false);
                 Log::channel('process')->info('11- PAUSAR:' . $resultPause . ' ItemId: ' . $itemId);
@@ -248,7 +270,6 @@ class InboundPricesFunctions
             updateCallback($idCallBack, 2, ['Produto dentro do preço mínimo' => ['minimo' => $minimalPriceToUse, 'anuncio' => $salePrice]]);
         }
 
-        Log::channel('process')->info('SAINDO - pricesInbound , ItemId: ' . $itemId);
     }
 
     public function checkPricesInbound($dataRecheck){
@@ -341,7 +362,6 @@ class InboundPricesFunctions
         $itemData = $this->shopee_communications->getItemBaseInfo($sellerId, (int)$itemId, $token);
 
         if(!$itemData['success']){
-            Log::channel('process')->info('ITEM SEM PREÇO: ' . $itemId);
             //Não conseguimos consultar os preços, então aborta o processo
             updateCallback($idCallBack, 3, ['Erro ao consultar o anuncio' => $itemData]);
             return false;
@@ -363,7 +383,7 @@ class InboundPricesFunctions
             }
         }
 
-        $itemName = $item['item_name'] . ($item['model'] ? ' - ' . $item['model']['model_name'] : '');
+        $itemName = $item['item_name'] . (($item['model'] ?? false) ? ' - ' . $item['model']['model_name'] : '');
         $permalink = "https://shopee.com.br/product/" . $sellerId . "/" . $itemId . "/";
 
         //buscando o preço do anúncio.
@@ -430,6 +450,7 @@ class InboundPricesFunctions
             if($attempt > 0){
                 //já tentou uma vez então aborta o processo e registra o erro
                 updateCallback($idCallBack, 3, ['Attempt' => $attempt, 'message' => 'Nao conseguimos salvar a publicacao!']);
+
                 return false;
             }
 
@@ -437,6 +458,7 @@ class InboundPricesFunctions
             //reprograma o processo
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'default');
             updateCallback($idCallBack, 2, ['message' => 'Não tinhamos o anuncio, estamos criando o cadastro e reprogramando verificação.']);
+
             return false;
 
         }
@@ -475,6 +497,7 @@ class InboundPricesFunctions
             if($updateResult > 0){
                 $pauseAdd = false;
                 $dataInfraction['punish'] = 'Iniciada atualização de preço.';
+
             }
             
             //2 - Pausar anúncio se não conseguiu atualizar os preços.
@@ -508,8 +531,6 @@ class InboundPricesFunctions
         }else{
             updateCallback($idCallBack, 2, ['Produto dentro do preço mínimo' => ['minimo' => $minimalPriceToUse, 'anuncio' => $salePrice]]);
         }
-
-        Log::channel('process')->info('SAINDO - pricesInbound , ItemId: ' . $itemId);
 
         $paramsItem = [
             'result' => [
@@ -545,7 +566,7 @@ class InboundPricesFunctions
         ];
     }
 
-    private function updateProduct($item, $token, $itemId, $userId){
+    private function updateProduct($item, $token, $itemId, $userId, $fsitem){
         $params = [
             'family_name' => $item['family_name'] ?? null,
             'user_product_id' => $item['user_product_id'] ?? null,
@@ -602,6 +623,7 @@ class InboundPricesFunctions
                     'ean' => $attribs['ean'],
                     'title' => $item['title'] . " " . $variation['attribute_combinations'][0]['value_name'],
                     'status' => $item['status'],
+                    'fs_item' => $fsitem,
                     'prices' => json_encode($prices),
                     'variations' => json_encode($variations),
                     'params' => json_encode($params),
@@ -625,6 +647,7 @@ class InboundPricesFunctions
                 'ean' => $attribs['ean'],
                 'title' => $item['title'],
                 'status' => $item['status'],
+                'fs_item' => $fsitem,
                 'prices' => json_encode($prices),
                 'variations' => "[]",
                 'params' => json_encode($params),

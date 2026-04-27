@@ -29,4 +29,16 @@ class PublicationsConnections extends BaseConnection
             ]
         );
     }
+
+
+    public function getItemsToMonitoring(){
+
+        return $this->newQuery()
+            ->where([
+                ['origin', '!=', 'BLING'],
+                ['fs_item', 1]
+            ])
+            ->get();
+    }
+
 }

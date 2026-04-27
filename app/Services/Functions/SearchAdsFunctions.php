@@ -37,24 +37,41 @@ class SearchAdsFunctions
             $allAuthentications = $this->authentication_connections->getMinimalDataFromChannels()->toArray();
         }
 
+        $dataLog = [
+            'task' => 'findAds',
+            'details' => 'Iniciando busca de anúncios de ' . count($allAuthentications) . ' canais'
+        ];
+        $idExec = setExecutionLog($dataLog['task'], $dataLog['details']);
+
         // 2 - Busca a relação de SKUs e EANs do fornecedor
         //$allProducts = $this->product_provider_connections->getMinimalDataFromProducts()->toArray();
-        $delay = 0;
+        $delayMeli = 0;
+        $delayBling = 0;
+        $delayShopee = 0;
+        $countMeli = 0;
+        $countBling = 0;
+        $countShopee = 0;
+
         foreach($allAuthentications as $channels){
 
             // delay para evitar HTTP 429
-            $delay += 0.5;
             switch ($channels['code']) {
                 case 'MELI':
-                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, $delay, 'default');
+                    $delayMeli += 0.5;
+                    $countMeli ++;
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdMeli', $channels, $delayMeli, 'anuMeli');
                     break;
 
                 case 'BLING':
-                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdBling', $channels, $delay, 'default');
+                    $delayBling += 1;
+                    $countBling ++;
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdBling', $channels, $delayBling, 'anuBling');
                     break; 
                     
                 case 'SHOPEE':
-                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdShopee', $channels, $delay, 'default');
+                    $delayShopee += 0.5;
+                    $countShopee ++;
+                    dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getAdShopee', $channels, $delayShopee, 'anuShopee');
                     break; 
 
                 default:
@@ -64,62 +81,12 @@ class SearchAdsFunctions
             
         }
 
+        $result = 'Busca de anúncios concluída. Resultados: Meli:' . $countMeli . ', BLING:' . $countBling . ', SHOPEE:' . $countShopee;
+        updateExecutionLog($idExec, $result);
+
     }
 
     //Mercado Livre
-    // public function getAdMeli($params){
-
-    //     $token = $params['token'];
-    //     $sellerId = $params['user_channel_id'];
-    //     $userId = $params['user_id'];
-
-    //     $scrool = null;
-    //     $count = 0;
-    //     $delay = 0;
-
-    //     $refList = $this->getDataProducts();
-
-    //     $while = true;
-
-    //     while ($while) {
-
-    //         $tempResult = $this->meli_communications->getPublications(
-    //             $token,
-    //             $sellerId,
-    //             $scrool
-    //         );
-
-    //         $scrool = $tempResult['data']['scroll_id'] ?? null;
-
-    //         if (!empty($tempResult['data']['results']) && is_array($tempResult['data']['results'])) {
-    //             $params = [
-    //                 'result' => $tempResult['data']['results'],
-    //                 'token' => $token,
-    //                 'sellerId' => $sellerId,
-    //                 'userId' => $userId,
-    //                 'refList' => $refList,
-    //             ];
-    //             $delay += 0.5;
-    //             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdMeli', $params, $delay, 'default');
-    //         }
-
-    //         $count++;
-
-    //         if (empty($scrool)) {
-    //             $while = false;
-    //         }
-
-    //         //Trava de segurança para evitar loop infinito e limita a busca de 20.000 anúncios
-    //         if($count > 1000){
-    //             $while = false;
-    //         }
-
-    //         // delay para evitar HTTP 429
-    //         usleep(500000); // 0.5s
-
-    //     }
-
-    // }
     public function getAdMeli(array $params): void
     {
         $token = $params['token'];
@@ -133,7 +100,13 @@ class SearchAdsFunctions
 
         $refList = $this->getDataProducts();
 
+        $idExec = setExecutionLog(__FUNCTION__, 'Iniciado job para buscar anúncios do Mercado Livre');
+        $execs = 0;
+        $faileds = 0;
+        $locals = null;
+
         while (true) {
+            $execs++;
             $response = $this->meli_communications->getPublications(
                 $token,
                 $sellerId,
@@ -147,7 +120,9 @@ class SearchAdsFunctions
                     'scroll_id' => $scrollId,
                     'response' => $response,
                 ]);
-                break;
+                $faileds++;
+                $locals .= __LINE__ . ", (" . $execs . ")";
+                continue;
             }
 
             $data = $response['data'] ?? null;
@@ -161,7 +136,9 @@ class SearchAdsFunctions
                     'scroll_id' => $scrollId,
                     'response' => $response,
                 ]);
-                break;
+                $faileds++;
+                $locals .= __LINE__ . ", (" . $execs . ")";
+                continue;
             }
 
             if (!empty($results)) {
@@ -179,8 +156,11 @@ class SearchAdsFunctions
                     'getDetailsAdMeli',
                     $jobParams,
                     $jobDelay,
-                    'default'
+                    'anuMeli'
                 );
+            }else{
+                $faileds++;
+                $locals .= __LINE__ . ", (" . $execs . ")";
             }
 
             $count++;
@@ -195,7 +175,9 @@ class SearchAdsFunctions
                     'user_id' => $userId,
                     'scroll_id' => $nextScrollId,
                 ]);
-                break;
+                $faileds++;
+                $locals .= __LINE__ . ", (" . $execs . ")";
+                continue;
             }
 
             if ($count >= 1000) {
@@ -204,14 +186,19 @@ class SearchAdsFunctions
                     'user_id' => $userId,
                     'count' => $count,
                 ]);
-                break;
+                $faileds++;
+                $locals .= __LINE__ . ", (" . $execs . ")";
+                continue;
             }
 
             $lastScrollId = $scrollId;
             $scrollId = $nextScrollId;
 
-            usleep(500000); // 0.5s para reduzir risco de HTTP 429
+            usleep(100000); // 0.3s para reduzir risco de HTTP 429
         }
+
+        $result = 'Verificação concluída. Execuções: ' . $execs . ', Falhas: ' . $faileds . ', Locais: ' . $locals . ', Seller: ' . $sellerId;
+        updateExecutionLog($idExec, $result);
     }
 
     public function getDetailsAdMeli($result){
@@ -221,12 +208,18 @@ class SearchAdsFunctions
         $delay = 0;
         $refList = $result['refList'];
 
+        $idExec = setExecutionLog(__FUNCTION__, 'Iniciado grupos de '  . count($items['data'] ?? []) . ' anuncios Meli.');
+
+        $execs = 0;
+
         foreach(($items['data'] ?? []) as $item){
             $item = $item['body'];
             $itemId = $item['id'];
             $toStore = [];
+            $execs ++;
 
             if($item['status'] != 'active'){
+                //TODO verificar se o item está pausado ou excluido. Se estiver excluido, remover da tabela.
                 continue;
             }
 
@@ -323,29 +316,34 @@ class SearchAdsFunctions
                 ];
 
             }
-            
+
             $this->publications_connections->storeOrUpdatePublications($toStore);
             $delay += 0.5;
-            if($fsItem ?? false){
-                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'checkPricesMeli', $toStore, $delay, 'default');
-            }
         }
+
+        updateExecutionLog($idExec, 'Finalizado grupos de 20 anuncios Meli.  Executados: ' . $execs);
     }
 
     //Bling
     public function getAdBling($params){
+
         $token = $params['token'];
         $sellerId = $params['user_channel_id'];
         $toStore = [];
         $userId = $params['user_id'];
         $count = 1;
         $page = 1;
+        $totalCount = 0;
 
         $while = true;
 
+        $finale = null;
+
+        $idExec = setExecutionLog(__FUNCTION__, 'Iniciado job para buscar produtos no Bling.  UserId: ' . $userId);
+
         while($while){
             $tempResult = $this->bling_communications->getAllProducts($token, $page);
-            $countItems = count($tempResult['data']);
+            $countItems = count($tempResult['data'] ?? []);
 
             if($countItems > 0){
 
@@ -393,13 +391,16 @@ class SearchAdsFunctions
                         'updated_at'  => dateUtc()
                     ];
 
+                    $totalCount++;
+
                 }
 
                 $this->publications_connections->storeOrUpdatePublications($toStore);
-            
+
             }else{
                 //sai do while
                 $while = false;
+                $finale .= __LINE__ . ' ';
             }
 
             $page++;
@@ -412,8 +413,11 @@ class SearchAdsFunctions
             //Trava de segurança para evitar loop infinito e limita a busca de 10.000 produtos
             if($count > 100){
                 $while = false;
+                $finale .= __LINE__ . ' ';
             }
         }
+
+        updateExecutionLog($idExec, 'Finalizado busca de produtos no Bling.  Executados: ' . $totalCount . ' Paginas: ' . $page . ' Saida: ' . $finale);
 
     }
 
@@ -431,6 +435,12 @@ class SearchAdsFunctions
         $while = true;
 
         $refList = $this->getDataProducts();
+        
+        $idExec = setExecutionLog(__FUNCTION__, 'Iniciado job para buscar anúncios na Shopee');
+
+        $totalAds = 0;
+        $countJobs = 0;
+        $faileds = null;
 
         while ($while) {
             //Busca a lista de anuncios na Shopee
@@ -438,22 +448,26 @@ class SearchAdsFunctions
             $dataItem   = data_get($tempResult, 'data.response.item');
 
             if ($dataItem) {
+                $countJobs ++;
+                $totalAds += count($dataItem ?? []);
+                
                 $paramsItem = [
                     'result' => $dataItem,
                     'sellerId' => $sellerId,
                     'userId' => $userId,
                     'refList' => $refList,
                 ];
+
                 $delay += 0.5;
 
-                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdShopee', $paramsItem, $delay, 'default');
+                dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'getDetailsAdShopee', $paramsItem, $delay, 'anuShopee');
                 
                 //atualiza o offset
                 $offset = data_get($tempResult, 'data.response.next_offset');
             }else{
                 //sair do while
                 $while = false;
-                
+                $faileds .= "," . __LINE__;
             }
 
             $count++;
@@ -466,12 +480,17 @@ class SearchAdsFunctions
             //Trava de segurança para evitar loop infinito e limita a busca de 20.000 anúncios
             if($count > 1000){
                 $while = false;
+                $faileds .= "," . __LINE__;
             }
 
             // delay para evitar HTTP 429
             usleep(500000); // 0.5s
 
         }
+
+        $result = 'Total de anúncios: ' . $totalAds . ', Jobs criados: ' . $countJobs . ', Falhas: ' . $faileds;
+        updateExecutionLog($idExec, $result);
+
     }
     public function getDetailsAdShopee($result)
     {
@@ -482,6 +501,9 @@ class SearchAdsFunctions
         $modelData = null;
         $toStore = [];
 
+        $idExec = setExecutionLog(__FUNCTION__, 'Iniciados detalhes anuncios.  Total: ' . count($itemsGroup));
+
+        $countExec = 0;
         foreach($itemsGroup as $item){
             
             $itemsDataShopee = $this->shopee_communications->getItemBaseInfo($sellerId, $item['item_id']);
@@ -566,9 +588,11 @@ class SearchAdsFunctions
 
                 }
 
+                $countExec++;
+
             }else{
                 //produto sem variações
-                $fsItem = (in_array($itemData['item_sku'], $refList) || in_array($itemData['gtin_code'], $refList));
+                $fsItem = (in_array($itemData['item_sku'] ?? null, $refList) || in_array($itemData['gtin_code'] ?? null, $refList));
 
                 $prices = [];
                 $prices = [
@@ -611,14 +635,16 @@ class SearchAdsFunctions
                     'updated_at'  => dateUtc()
                 ];
 
+                $countExec++;
+
             }
             usleep(500000); // 0.5s Delay para evitar http 429
         }
 
         $this->publications_connections->storeOrUpdatePublications($toStore);
+        $result = 'Total executado: ' . $countExec;
+        updateExecutionLog($idExec, $result);
 
-        // $itemsIds = implode(',', array_map('trim', array_filter($result['result'])));
-        // dd($result, $itemsIds);
     }
 
 
@@ -647,7 +673,7 @@ class SearchAdsFunctions
                     ];
 
                     $delay += 0.5;
-                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => 0, 'dataCallback' => $dataCallback, 'attempt' => 0], $delay, 'default');
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => 0, 'dataCallback' => $dataCallback, 'attempt' => 0], $delay, 'anuMeli');
                 }
             }
         }

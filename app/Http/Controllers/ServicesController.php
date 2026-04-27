@@ -19,18 +19,13 @@ class ServicesController extends Controller
 
     public function devTeste(Request $request)
     {
-        // $shopId = 1721755838;
-        // $itemId = 58254352105;
-        // $result = $this->shopee_communications->getModelList($shopId, $itemId);
-        // dd($result);
+
+        dispatchGenericJob(\App\Services\Functions\MonitoringFunction::class, 'getItemToMonitoring', [], 0, 'default');
+        dd('Concluído');
         
-        $this->monitoring_function->getItemToMonitoring();
 
-        return 'Iniciado getItemToMonitoring';
-
-        $result = $this->search_ads_functions->findAds();
-    
-        $this->monitoring_function->getItemToMonitoring();
+        // dispatchGenericJob(\App\Services\Functions\MonitoringFunction::class, 'getItemToMonitoring', [], 0, 'default');
+        // dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', [], 0, 'default'); // Atualiza anúncios 1 vez ao dia.
     }
     
 }

@@ -3,6 +3,7 @@
 use App\Services\DbConnections\AuthenticationConnections;
 use Carbon\Carbon;
 use App\Services\DbConnections\CallbackConnections;
+use App\Services\DbConnections\ExecutionLogsConnections;
 use App\Services\DbConnections\MessageConnections;
 
 if (! function_exists('dateUtc')){
@@ -148,5 +149,26 @@ if (!function_exists('getTokenShopee')) {
             // Se quiser, pode logar esse erro
             return null;
         }
+    }
+}
+
+if (!function_exists('setExecutionLog')) {
+    function setExecutionLog(string $task, string $details) {
+        $executionLogConnections = new ExecutionLogsConnections;
+
+        $data['created_at'] = dateUtc();
+        $data['task'] = $task;
+        $data['details'] = json_encode($details);
+        return $executionLogConnections->insertGetId($data);
+    }
+}
+
+if (!function_exists('updateExecutionLog')) {
+    function updateExecutionLog(int $id, string $result) {
+        $executionLogConnections = new ExecutionLogsConnections;
+
+        $data['updated_at'] = dateUtc();
+        $data['result'] = json_encode($result);
+        return $executionLogConnections->update($id, $data);
     }
 }

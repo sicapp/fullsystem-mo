@@ -5,10 +5,20 @@ use Illuminate\Support\Facades\Http;
 
 abstract class Communications
 {
-	 public function get($uri, $token = null, $params = null, $decode=true){
-        if($token != null){
+	 public function get($uri, $token = null, $params = null, $decode=true, $header = null){
+        if($token != null && $header == null){
             $dataReturn = Http::withHeaders([ 'Authorization' => 'Bearer ' . $token,])
                 ->get($uri, $params);
+        }elseif($token == null && $header != null){
+            $dataReturn = Http::withHeaders($header)
+                ->get($uri, $params);
+        }elseif($token != null && $header != null){
+            $headers = array_merge(
+                ['Authorization' => 'Bearer ' . $token],
+                $header
+            );
+
+            $dataReturn = Http::withHeaders($headers)->get($uri, $params);
         }else{
             $dataReturn = Http::get($uri, $params);
         }
@@ -25,7 +35,7 @@ abstract class Communications
         }
     }
 
-    public function post($uri, $token = null, $params = null, $decode=true){
+    public function post($uri, $token = null, $params = null, $decode=true, $header = null){
 
         if($token != null){
             $dataReturn = Http::withHeaders([ 'Authorization' => 'Bearer ' . $token,])
@@ -45,7 +55,7 @@ abstract class Communications
         }
     }
 
-    public function put($uri, $token = null, $params = null, $decode=true){
+    public function put($uri, $token = null, $params = null, $decode=true, $header = null){
         if($token != null){
             $dataReturn = Http::withHeaders([ 'Authorization' => 'Bearer ' . $token,])
                 ->put($uri, $params);
@@ -64,7 +74,7 @@ abstract class Communications
         }
     }
 
-    public function delete($uri, $token = null, $params = null, $decode=true){
+    public function delete($uri, $token = null, $params = null, $decode=true, $header = null){
         if($token != null){
             $dataReturn = Http::withHeaders([ 'Authorization' => 'Bearer ' . $token,])
                 ->delete($uri, $params);

@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use Carbon\Carbon;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 class TimingController extends Controller
 {
@@ -155,25 +153,21 @@ class TimingController extends Controller
     { 
         //
     }
-    private function Interval_1_hour()
+    private function Interval_1_hour() // getItemToMonitoring , SearchAdsFunctions
     {
         $now = Carbon::now('America/Sao_Paulo');
+        $toEcecute = [6,8,10,12,14,16,18,20];
 
-        if($now->hour === 1 && $now->minute === 0)  //Executa a 1 da manhã
+        if(in_array($now->hour, $toEcecute) && $now->minute === 0)      //Executa nos horários definidos em $toExecute
+        {   
+            dispatchGenericJob(\App\Services\Functions\MonitoringFunction::class, 'getItemToMonitoring', [], 0, 'default');
+        }
+
+        if($now->hour === 22 && $now->minute === 0)                     //Executa as 22:00 - Busca todos os anúncios dos sellers
         {   
             dispatchGenericJob(\App\Services\Functions\SearchAdsFunctions::class, 'findAds', [], 0, 'default');
         }
 
-        if($now->hour === 4 && $now->minute === 0)  //Executa as 4 da manhã
-        {   
-            dispatchGenericJob(\App\Services\Functions\MonitoringFunction::class, 'getItemToMonitoring', [], 0, 'default');
-        }
-
-        if($now->hour === 16 && $now->minute === 0)  //Executa as 16 da manhã
-        {   
-            dispatchGenericJob(\App\Services\Functions\MonitoringFunction::class, 'getItemToMonitoring', [], 0, 'default');
-        }
-        
     }
 
     // EXECUÇÕES DIÁRIAS E SEMANAIS

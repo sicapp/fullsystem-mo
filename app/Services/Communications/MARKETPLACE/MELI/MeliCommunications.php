@@ -29,7 +29,8 @@ class MeliCommunications extends Communications
 
     public function getItemPrice($token, $resource){
         $uri = config('services.meli.url') . $resource;
-        return self::get($uri, $token, null, true);
+        $header = ['show-all-prices' => "true"];
+        return self::get($uri, $token, null, true, $header);
     }
     
     public function getItemById($token, $itemId){   
@@ -52,5 +53,17 @@ class MeliCommunications extends Communications
     {
         $uri = config('services.meli.url') . "/items/{$itemId}";
         return self::put($uri, $token, ['status' => 'paused'], true);
+    }
+
+    public function removeWholesalePrice($token, $itemId, $priceId)
+    {
+        $params = [
+            "prices" => [
+                ['id' => $priceId]
+            ]
+        ];
+
+        $uri = config('services.meli.url') . "/items/{$itemId}/prices/standard/quantity";
+        return self::post($uri, $token, $params, true);
     }
 }
