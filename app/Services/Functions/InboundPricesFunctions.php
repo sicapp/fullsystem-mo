@@ -161,7 +161,7 @@ class InboundPricesFunctions
                 }
             }
 
-            $this->updateProduct($item, $token, $itemId, $userId, $fsitem);
+            //$this->updateProduct($item, $token, $itemId, $userId, $fsitem);
 
         }else{
             //Não temos os dados desse produto, então vamos cadastrar;
@@ -174,7 +174,7 @@ class InboundPricesFunctions
                 return false;
             }
 
-            $this->updateProduct($item, $token, $itemId, $userId, $fsitem);
+            //$this->updateProduct($item, $token, $itemId, $userId, $fsitem);
 
             //reprograma o processo
             dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 1], 300, 'anuMeli');
