@@ -96,9 +96,17 @@ class InboundPricesFunctions
             return false;
         }
 
-        //verificando se tem preços de atacado ()
+        //verificando preços liquidos e preços por quantidade
         $wholesale = in_array('standard_price_by_quantity', $item['tags']);
         if($wholesale){
+
+            //saber se tem preços líquidos
+            $liquidiActive = in_array("net_taxes_amount_prices", $item['tags'] ?? []);
+            if($liquidiActive){
+                //tem preços liquidos, então remove.
+                $remove = $this->meli_communications->removeLiquidPrice($token, $itemId);
+            }
+
             // Remover preços de atacado
             $priceDefaultId = data_get($priceData, 'data.prices.0.id');
             $remove = $this->meli_communications->removeWholesalePrice($token, $itemId, $priceDefaultId);

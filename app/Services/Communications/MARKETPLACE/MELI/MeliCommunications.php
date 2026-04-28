@@ -66,4 +66,10 @@ class MeliCommunications extends Communications
         $uri = config('services.meli.url') . "/items/{$itemId}/prices/standard/quantity";
         return self::post($uri, $token, $params, true);
     }
+
+    public function removeLiquidPrice($token, $itemId){
+        $params = ["prices" => []];
+        $uri = config('services.meli.url') . "/items/{$itemId}/prices/standard/quantity";
+        return self::post($uri, $token, $params, true);
+    }
 }
