@@ -96,27 +96,6 @@ class InboundPricesFunctions
             return false;
         }
 
-        //verificando preços liquidos e preços por quantidade
-        $wholesale = in_array('standard_price_by_quantity', $item['tags']);
-        if($wholesale){
-
-            //saber se tem preços líquidos
-            $liquidiActive = in_array("net_taxes_amount_prices", $item['tags'] ?? []);
-            if($liquidiActive){
-                //tem preços liquidos, então remove.
-                $remove = $this->meli_communications->removeLiquidPrice($token, $itemId);
-            }
-
-            // Remover preços de atacado
-            $priceDefaultId = data_get($priceData, 'data.prices.0.id');
-            $remove = $this->meli_communications->removeWholesalePrice($token, $itemId, $priceDefaultId);
-            
-            if($remove['success']){
-                dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 5, 'anuMeli');
-                updateCallback($idCallBack, 3, ['Preço por atacado removido!']);
-            }
-        }
-        
         $salePrice = 9999999999;
         //passou, então vamos verificar o menor preço praticado pelo anúncio:
         foreach($priceData['data']['prices'] as $value) {
@@ -195,6 +174,28 @@ class InboundPricesFunctions
         // Agora verificamos se o anúncio está abaixo do preço mínimo    $sellerId
 
         if ($salePrice < $minimalPriceToUse){
+
+            //verificando preços liquidos e preços por quantidade
+            $wholesale = in_array('standard_price_by_quantity', $item['tags']);
+            if($wholesale){
+
+                //saber se tem preços líquidos
+                $liquidiActive = in_array("net_taxes_amount_prices", $item['tags'] ?? []);
+                if($liquidiActive){
+                    //tem preços liquidos, então remove.
+                    $remove = $this->meli_communications->removeLiquidPrice($token, $itemId);
+                }
+
+                // Remover preços de atacado
+                $priceDefaultId = data_get($priceData, 'data.prices.0.id');
+                $remove = $this->meli_communications->removeWholesalePrice($token, $itemId, $priceDefaultId);
+                
+                if($remove['success']){
+                    dispatchGenericJob(\App\Services\Functions\InboundPricesFunctions::class, 'pricesInbound', ['idCallBack' => $idCallBack, 'dataCallback' => $dataRequest['dataCallback'], 'attempt' => 0], 5, 'anuMeli');
+                    updateCallback($idCallBack, 3, ['Preço por atacado removido!']);
+                }
+            }
+
             //Está abaixo do mínimo.
             $dataInfraction = [
                 'user_id' => $userId,
